@@ -21,11 +21,13 @@ import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaHandler;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaInPipelineInterface;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.ReplicaOutputStreams;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.DataChecksum.Type;
@@ -187,8 +189,11 @@ public class DatanodeBackupProcessor implements Runnable, Closeable {
     if (lockManager.tryToLock(blockId)) {
       try {
         FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
-        try (InputStream data = fsDataset.getBlockInputStream(extendedBlock, 0)) {
-          try (InputStream meta = fsDataset.getMetaDataInputStream(extendedBlock)) {
+        BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(extendedBlock);
+        long numBytes = blockLocalPathInfo.getNumBytes();
+        try (
+            LengthInputStream data = new LengthInputStream(fsDataset.getBlockInputStream(extendedBlock, 0), numBytes)) {
+          try (LengthInputStream meta = fsDataset.getMetaDataInputStream(extendedBlock)) {
             backupStore.backupBlock(extendedBlock, data, meta);
           }
         }

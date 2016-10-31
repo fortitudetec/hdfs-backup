@@ -4,10 +4,11 @@ import java.io.InputStream;
 
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 
 public abstract class BackupStore extends Configured {
 
-  public abstract void init();
+  public abstract void init() throws Exception;
 
   /**
    * The backup method will need to store the extendedBlock, data stream, and
@@ -15,7 +16,7 @@ public abstract class BackupStore extends Configured {
    * succeeds but the streams will not be closed that will be the responsibility
    * of the calling class.
    */
-  public abstract void backupBlock(ExtendedBlock extendedBlock, InputStream data, InputStream metaData)
+  public abstract void backupBlock(ExtendedBlock extendedBlock, LengthInputStream data, LengthInputStream metaData)
       throws Exception;
 
   /**

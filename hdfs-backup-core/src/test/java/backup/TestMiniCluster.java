@@ -1,5 +1,6 @@
 package backup;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 
@@ -11,8 +12,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-
-import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
 
 import backup.datanode.BackupFsDatasetSpiFactory;
 import backup.datanode.DatanodeBackupServicePlugin;
@@ -65,7 +64,7 @@ public class TestMiniCluster {
         boolean beginTest = true;
         while (true) {
           try {
-            try (ByteOutputStream output = new ByteOutputStream()) {
+            try (ByteArrayOutputStream output = new ByteArrayOutputStream()) {
               try (FSDataInputStream inputStream = fileSystem.open(path)) {
                 IOUtils.copy(inputStream, output);
               }
@@ -74,7 +73,7 @@ public class TestMiniCluster {
                 hdfsCluster.stopDataNode(0);
                 beginTest = false;
               } else {
-                System.out.println("YAY it restored the missing block!!!! " + output.getCount());
+                System.out.println("YAY it restored the missing block!!!! " + output.toByteArray().length);
                 return;
               }
             }

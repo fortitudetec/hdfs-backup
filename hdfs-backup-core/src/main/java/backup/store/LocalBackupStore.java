@@ -8,6 +8,7 @@ import java.io.InputStream;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 
 public class LocalBackupStore extends BackupStore {
 
@@ -16,7 +17,7 @@ public class LocalBackupStore extends BackupStore {
   private File dir;
 
   @Override
-  public void init() {
+  public void init() throws Exception {
     Configuration configuration = getConf();
     String localPath = configuration.get(DFS_BACKUP_LOCALBACKUPSTORE_PATH);
     dir = new File(localPath);
@@ -24,7 +25,7 @@ public class LocalBackupStore extends BackupStore {
   }
 
   @Override
-  public void backupBlock(ExtendedBlock extendedBlock, InputStream data, InputStream metaData) throws Exception {
+  public void backupBlock(ExtendedBlock extendedBlock, LengthInputStream data, LengthInputStream metaData) throws Exception {
     File dataFile = getDataFile(extendedBlock);
     File metaDataFile = getMetaDataFile(extendedBlock);
     try (FileOutputStream output = new FileOutputStream(dataFile)) {

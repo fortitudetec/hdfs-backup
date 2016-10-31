@@ -3,11 +3,12 @@ package backup.store;
 import java.io.InputStream;
 
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 
 public class DevNullBackupStore extends BackupStore {
 
   @Override
-  public void backupBlock(ExtendedBlock extendedBlock, InputStream data, InputStream meta) throws Exception {
+  public void backupBlock(ExtendedBlock extendedBlock, LengthInputStream data, LengthInputStream meta) throws Exception {
 
   }
 
@@ -27,8 +28,8 @@ public class DevNullBackupStore extends BackupStore {
   }
 
   @Override
-  public void init() {
-    
+  public void init() throws Exception {
+
   }
 
 }
