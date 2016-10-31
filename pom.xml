@@ -22,8 +22,20 @@
 			</dependency>
 			<dependency>
 				<groupId>hdfs-backup</groupId>
+				<artifactId>hdfs-backup-core</artifactId>
+				<version>${project.version}</version>
+				<type>test-jar</type>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
 				<artifactId>s3-backup-store</artifactId>
 				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
+				<artifactId>s3-backup-store</artifactId>
+				<version>${project.version}</version>
+				<type>test-jar</type>
 			</dependency>
 			<dependency>
 				<groupId>org.apache.hadoop</groupId>

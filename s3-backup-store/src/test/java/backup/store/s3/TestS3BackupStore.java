@@ -3,6 +3,7 @@ package backup.store.s3;
 import java.util.UUID;
 
 import org.apache.hadoop.conf.Configuration;
+import org.junit.Test;
 
 import backup.BackupConstants;
 import backup.MiniClusterTestBase;
@@ -13,6 +14,11 @@ public class TestS3BackupStore extends MiniClusterTestBase {
   private final String prefix = "test-hdfs-backup-" + UUID.randomUUID()
                                                           .toString();
   private boolean createdBucket;
+  
+  @Test
+  public void test() {
+    
+  }
 
   @Override
   protected void setupBackupStore(Configuration conf) throws Exception {
