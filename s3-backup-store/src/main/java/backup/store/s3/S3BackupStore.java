@@ -33,7 +33,6 @@ public class S3BackupStore extends BackupStore {
   private static final String BLOCK_ID = "blockId";
   private static final String BLOCK_POOL_ID = "blockPoolId";
   private static final String BLOCK_NAME = "blockName";
-  private static final String HDFS_BACKUP = "hdfs-backup";
 
   private static final Joiner JOINER = Joiner.on('/');
 
@@ -47,7 +46,7 @@ public class S3BackupStore extends BackupStore {
     Class<? extends AWSCredentialsProvider> clazz = (Class<? extends AWSCredentialsProvider>) conf
         .getClass(DFS_BACKUP_S3_CREDENTIALS_PROVIDER, DefaultAWSCredentialsProviderChain.class);
     s3client = new AmazonS3Client(clazz.newInstance());
-    bucketName = conf.get(DFS_BACKUP_S3_BUCKET_NAME, HDFS_BACKUP);
+    bucketName = conf.get(DFS_BACKUP_S3_BUCKET_NAME);
     objectPrefix = conf.get(DFS_BACKUP_S3_OBJECT_PREFIX);
   }
 
@@ -89,11 +88,11 @@ public class S3BackupStore extends BackupStore {
 
   private String getBaseKey(ExtendedBlock extendedBlock) {
     if (objectPrefix == null) {
-      return JOINER.join(extendedBlock.getBlockPoolId(), extendedBlock.getBlockId(),
-          extendedBlock.getGenerationStamp());
+      return JOINER.join(extendedBlock.getBlockPoolId(),
+          extendedBlock.getBlockId() + "." + extendedBlock.getGenerationStamp());
     } else {
-      return JOINER.join(objectPrefix, extendedBlock.getBlockPoolId(), extendedBlock.getBlockId(),
-          extendedBlock.getGenerationStamp());
+      return JOINER.join(objectPrefix, extendedBlock.getBlockPoolId(),
+          extendedBlock.getBlockId() + "." + extendedBlock.getGenerationStamp());
     }
   }
 
