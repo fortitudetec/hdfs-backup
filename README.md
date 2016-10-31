@@ -10,7 +10,24 @@ In the projects current state the blocks are replicated from the DataNodes to th
 
 ### Install
 
-After building the project the module s3-backup-store will contain an uber jar that will need to be added to the NameNode and DataNode classpaths.
+Execute:
+```
+mvn clean install
+```
+
+This will execute all tests and build all of the binaries.
+
+#### CDH Parcel
+
+Execute:
+```
+cd s3-backup-store-parcel
+./run_parcel_server.sh
+```
+
+In Cloudera Manager add your computer as a parcel server (e.g. http://hostname:8000/).
+
+Now you will need to add the parcel to all the nodes running NameNode and DataNode processes.
 
 ### Configure
 
