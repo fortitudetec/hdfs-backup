@@ -43,12 +43,12 @@ import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
 
-public class DatanodeRestoreProcessor implements Runnable, Closeable {
+public class DataNodeRestoreProcessor implements Runnable, Closeable {
 
 
-  private final static Logger LOG = LoggerFactory.getLogger(DatanodeRestoreProcessor.class);
+  private final static Logger LOG = LoggerFactory.getLogger(DataNodeRestoreProcessor.class);
 
-  private final static Map<DataNode, DatanodeRestoreProcessor> INSTANCES = new MapMaker().makeMap();
+  private final static Map<DataNode, DataNodeRestoreProcessor> INSTANCES = new MapMaker().makeMap();
 
   private final DataNode datanode;
   private final Thread thread;
@@ -69,17 +69,17 @@ public class DatanodeRestoreProcessor implements Runnable, Closeable {
     }
   };
 
-  public static synchronized DatanodeRestoreProcessor newInstance(Configuration conf, DataNode datanode)
+  public static synchronized DataNodeRestoreProcessor newInstance(Configuration conf, DataNode datanode)
       throws Exception {
-    DatanodeRestoreProcessor processor = INSTANCES.get(datanode);
+    DataNodeRestoreProcessor processor = INSTANCES.get(datanode);
     if (processor == null) {
-      processor = new DatanodeRestoreProcessor(conf, datanode);
+      processor = new DataNodeRestoreProcessor(conf, datanode);
       INSTANCES.put(datanode, processor);
     }
     return processor;
   }
 
-  private DatanodeRestoreProcessor(Configuration conf, DataNode datanode) throws Exception {
+  private DataNodeRestoreProcessor(Configuration conf, DataNode datanode) throws Exception {
     this.datanode = datanode;
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);

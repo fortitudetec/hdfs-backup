@@ -16,7 +16,7 @@ import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.Test;
 
 import backup.datanode.BackupFsDatasetSpiFactory;
-import backup.datanode.DatanodeBackupServicePlugin;
+import backup.datanode.DataNodeBackupServicePlugin;
 import backup.namenode.NameNodeBackupServicePlugin;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
@@ -37,7 +37,7 @@ public abstract class MiniClusterTestBase {
     Configuration conf = new Configuration();
     conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, hdfsDir.getAbsolutePath());
     conf.set(DFSConfigKeys.DFS_DATANODE_FSDATASET_FACTORY_KEY, BackupFsDatasetSpiFactory.class.getName());
-    conf.set(DFSConfigKeys.DFS_DATANODE_PLUGINS_KEY, DatanodeBackupServicePlugin.class.getName());
+    conf.set(DFSConfigKeys.DFS_DATANODE_PLUGINS_KEY, DataNodeBackupServicePlugin.class.getName());
     conf.set(DFSConfigKeys.DFS_NAMENODE_PLUGINS_KEY, NameNodeBackupServicePlugin.class.getName());
 
     conf.set(BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION, zkConnection);

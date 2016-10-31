@@ -43,11 +43,11 @@ import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
 
-public class DatanodeBackupProcessor implements Runnable, Closeable {
+public class DataNodeBackupProcessor implements Runnable, Closeable {
 
-  private final static Logger LOG = LoggerFactory.getLogger(DatanodeBackupProcessor.class);
+  private final static Logger LOG = LoggerFactory.getLogger(DataNodeBackupProcessor.class);
 
-  private final static Map<DataNode, DatanodeBackupProcessor> INSTANCES = new MapMaker().makeMap();
+  private final static Map<DataNode, DataNodeBackupProcessor> INSTANCES = new MapMaker().makeMap();
 
   private final DataNode datanode;
   private final BlockingQueue<ExtendedBlock> finializedBlocks = new LinkedBlockingQueue<>();
@@ -61,17 +61,17 @@ public class DatanodeBackupProcessor implements Runnable, Closeable {
   private final long pollTime;
   private final ExecutorService executorService;
 
-  public static synchronized DatanodeBackupProcessor newInstance(Configuration conf, DataNode datanode)
+  public static synchronized DataNodeBackupProcessor newInstance(Configuration conf, DataNode datanode)
       throws Exception {
-    DatanodeBackupProcessor processor = INSTANCES.get(datanode);
+    DataNodeBackupProcessor processor = INSTANCES.get(datanode);
     if (processor == null) {
-      processor = new DatanodeBackupProcessor(conf, datanode);
+      processor = new DataNodeBackupProcessor(conf, datanode);
       INSTANCES.put(datanode, processor);
     }
     return processor;
   }
 
-  private DatanodeBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
+  private DataNodeBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
     this.datanode = datanode;
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);

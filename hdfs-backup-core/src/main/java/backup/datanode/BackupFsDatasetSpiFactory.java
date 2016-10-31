@@ -23,7 +23,7 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
   private static final String FINALIZE_BLOCK = "finalizeBlock";
 
   private Factory<FsDatasetSpi<?>> factory;
-  private DatanodeBackupProcessor backupProcessor;
+  private DataNodeBackupProcessor backupProcessor;
 
   @Override
   public FsDatasetSpi<?> newInstance(DataNode datanode, DataStorage storage, Configuration conf) throws IOException {
@@ -38,7 +38,7 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
 
   private void setupBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
     if (backupProcessor == null) {
-      backupProcessor = DatanodeBackupProcessor.newInstance(conf, datanode);
+      backupProcessor = DataNodeBackupProcessor.newInstance(conf, datanode);
     }
   }
 
@@ -58,7 +58,7 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
    * @return
    */
   private static FsDatasetSpi<?> setupBackupEvents(FsDatasetSpi<?> datasetSpi,
-      DatanodeBackupProcessor backupProcessor) {
+      DataNodeBackupProcessor backupProcessor) {
     InvocationHandler handler = new BackupInvocationHandler(datasetSpi, backupProcessor);
     return (FsDatasetSpi<?>) Proxy.newProxyInstance(FsDatasetSpi.class.getClassLoader(),
         new Class<?>[] { FsDatasetSpi.class }, handler);
@@ -67,9 +67,9 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
   static class BackupInvocationHandler implements InvocationHandler {
 
     private final FsDatasetSpi<?> datasetSpi;
-    private final DatanodeBackupProcessor backupProcessor;
+    private final DataNodeBackupProcessor backupProcessor;
 
-    public BackupInvocationHandler(FsDatasetSpi<?> datasetSpi, DatanodeBackupProcessor backupProcessor) {
+    public BackupInvocationHandler(FsDatasetSpi<?> datasetSpi, DataNodeBackupProcessor backupProcessor) {
       this.datasetSpi = datasetSpi;
       this.backupProcessor = backupProcessor;
     }

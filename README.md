@@ -38,7 +38,7 @@ Now you will need to add the parcel to all the nodes running NameNode and DataNo
 </property>
 <property>
   <name>dfs.datanode.plugins</name>
-  <value>backup.datanode.DatanodeBackupServicePlugin</value>
+  <value>backup.datanode.DataNodeBackupServicePlugin</value>
 </property>
 <property>
   <name>dfs.namenode.plugins</name>
