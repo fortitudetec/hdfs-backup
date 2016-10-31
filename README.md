@@ -29,7 +29,7 @@ After building the project the module s3-backup-store will contain an uber jar t
 </property>
 <property>
   <name>dfs.backup.zookeeper.connection</name>
-  <value>zookeeper connection/backup</value>
+  <value><zookeeper connection>/backup</value>
 </property>
 <property>
   <name>dfs.backup.store.key</name>
@@ -42,18 +42,27 @@ After building the project the module s3-backup-store will contain an uber jar t
 
 <!-- Optional -->
 <!--
+
 If the prefix is not provided the keys generated will be of the format:
   <block pool id>/<block id>.<generation stamp>
 
 If the prefix is provided the keys generated will be of the format:
   <prefix>/<block pool id>/<block id>.<generation stamp>
 -->
+
 <property>
   <name>dfs.backup.s3.object.prefix</name>
   <value>hdfs-backup</value>
 </property>
 
-<!-- The DefaultAWSCredentialsProviderChain is used by default as the credentials provider.  This provider uses the following providers in order:
+<!--
+
+The backup.store.s3.DefaultS3AWSCredentialsProviderFactory is used by default
+as the credentials provider.  The DefaultS3AWSCredentialsProviderFactory uses
+the AWS com.amazonaws.auth.DefaultAWSCredentialsProviderChain internally to
+determine the credentials.  
+
+This provider uses the following providers in order:
 
 * EnvironmentVariableCredentialsProvider
 * SystemPropertiesCredentialsProvider
@@ -61,7 +70,7 @@ If the prefix is provided the keys generated will be of the format:
 * EC2ContainerCredentialsProviderWrapper
 -->
 <property>
-  <name>dfs.backup.s3.credentials.provider</name>
-  <value>com.amazonaws.auth.DefaultAWSCredentialsProviderChain</value>
+  <name>dfs.backup.s3.credentials.provider.factory</name>
+  <value>backup.store.s3.DefaultS3AWSCredentialsProviderFactory</value>
 </property>
 ```
