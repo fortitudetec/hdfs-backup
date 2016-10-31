@@ -23,12 +23,12 @@ import backup.zookeeper.ZooKeeperClient;
 public class TestMiniCluster {
 
   public static void main(String[] args) throws Exception {
-    File hdfsDir = new File("./test_hdfs");
-    rmr(hdfsDir);
+    File tmp = new File("./target/tmp");
+    rmr(tmp);
+    File hdfsDir = new File(tmp, "test_hdfs");
     hdfsDir.mkdirs();
 
-    File backup = new File("./backup");
-    rmr(backup);
+    File backup = new File(tmp, "backup");
     backup.mkdirs();
 
     String zkConnection = "localhost/backup";
