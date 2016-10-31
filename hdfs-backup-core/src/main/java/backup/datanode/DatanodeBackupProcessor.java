@@ -1,6 +1,6 @@
 package backup.datanode;
 
-import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT;
+import static backup.BackupConstants.*;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY;
 import static backup.BackupConstants.DFS_BACKUP_STORE_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_STORE_KEY;
@@ -9,11 +9,12 @@ import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY;
 import static backup.BackupConstants.LOCKS;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -32,7 +33,6 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.ReplicaOutputStreams;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.DataChecksum.Type;
 import org.apache.hadoop.util.ReflectionUtils;
-import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,6 +59,7 @@ public class DatanodeBackupProcessor implements Runnable, Closeable {
   private final int bytesPerChecksum;
   private final Type checksumType;
   private final long pollTime;
+  private final ExecutorService executorService;
 
   public static synchronized DatanodeBackupProcessor newInstance(Configuration conf, DataNode datanode)
       throws Exception {
@@ -76,8 +77,11 @@ public class DatanodeBackupProcessor implements Runnable, Closeable {
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);
     this.bytesPerChecksum = conf.getInt(DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_KEY,
         DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_DEFAULT);
-    this.checksumType = Type
-        .valueOf(conf.get(DFSConfigKeys.DFS_CHECKSUM_TYPE_KEY, DFSConfigKeys.DFS_CHECKSUM_TYPE_DEFAULT));
+    this.checksumType = Type.valueOf(
+        conf.get(DFSConfigKeys.DFS_CHECKSUM_TYPE_KEY, DFSConfigKeys.DFS_CHECKSUM_TYPE_DEFAULT));
+    int threads = conf.getInt(DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_KEY,
+        DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_DEFAULT);
+    executorService = Executors.newFixedThreadPool(threads);
     int zkSessionTimeout = conf.getInt(DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY, 30000);
     String zkConnectionString = conf.get(DFS_BACKUP_ZOOKEEPER_CONNECTION);
     if (zkConnectionString == null) {
@@ -114,6 +118,7 @@ public class DatanodeBackupProcessor implements Runnable, Closeable {
 
   @Override
   public void close() {
+    executorService.shutdownNow();
     IOUtils.closeQuietly(lockManager);
     IOUtils.closeQuietly(zooKeeper);
     running.set(false);
@@ -179,12 +184,31 @@ public class DatanodeBackupProcessor implements Runnable, Closeable {
    */
   boolean backupBlocks() throws Exception {
     ExtendedBlock extendedBlock = finializedBlocks.take();
-    backupBlock(extendedBlock);
+    executorService.submit(getRunnableToPerformBackup(extendedBlock));
     return true;
   }
 
-  public void backupBlock(ExtendedBlock extendedBlock)
-      throws KeeperException, InterruptedException, Exception, IOException {
+  private Runnable getRunnableToPerformBackup(ExtendedBlock extendedBlock) {
+    return new Runnable() {
+      @Override
+      public void run() {
+        try {
+          backupBlock(extendedBlock);
+        } catch (Exception e) {
+          LOG.error("Unknown error", e);
+          // try again
+          try {
+            finializedBlocks.put(extendedBlock);
+          } catch (InterruptedException ie) {
+            LOG.error("Unknown error", ie);
+            return;
+          }
+        }
+      }
+    };
+  }
+
+  public void backupBlock(ExtendedBlock extendedBlock) throws Exception {
     String blockId = Long.toString(extendedBlock.getBlockId());
     if (lockManager.tryToLock(blockId)) {
       try {

@@ -5,11 +5,12 @@
 	<groupId>hdfs-backup</groupId>
 	<artifactId>hdfs-backup</artifactId>
 	<packaging>pom</packaging>
-	<version>0.1-SNAPSHOT</version>
+	<version>1.0</version>
 
 	<modules>
 		<module>hdfs-backup-core</module>
 		<module>s3-backup-store</module>
+		<module>s3-backup-store-parcel</module>
 	</modules>
 
 	<dependencyManagement>
@@ -17,6 +18,11 @@
 			<dependency>
 				<groupId>hdfs-backup</groupId>
 				<artifactId>hdfs-backup-core</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
+				<artifactId>s3-backup-store</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
@@ -36,6 +42,15 @@
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
+
+	<dependencies>
+		<dependency>
+			<groupId>junit</groupId>
+		  <artifactId>junit</artifactId>
+		  <version>4.12</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
 
 	<build>
 		<pluginManagement>

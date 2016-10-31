@@ -19,10 +19,13 @@ public class BackupConstants {
   public static final int DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT = 30000;
 
   public static final String DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY = "dfs.backup.namenode.missing.blocks.poll.time";
-  public static final Long DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT = TimeUnit.SECONDS.toMillis(10);
+  public static final long DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT = TimeUnit.SECONDS.toMillis(10);
 
   public static final String DFS_BACKUP_DATANODE_BACKUP_BLOCK_POLL_TIME_KEY = "dfs.backup.datanode.backup.block.poll.time";
-  public static final Long DFS_BACKUP_DATANODE_BACKUP_BLOCK_POLL_TIME_DEFAULT = TimeUnit.SECONDS.toMillis(1);
+  public static final long DFS_BACKUP_DATANODE_BACKUP_BLOCK_POLL_TIME_DEFAULT = TimeUnit.SECONDS.toMillis(1);
+
+  public static final String DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_KEY = "dfs.backup.datanode.backup.handler.count";
+  public static final int DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_DEFAULT = 10;
 
   public static final String DFS_BACKUP_ZOOKEEPER_CONNECTION = "dfs.backup.zookeeper.connection";
 }

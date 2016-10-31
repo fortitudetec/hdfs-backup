@@ -1,6 +1,7 @@
 package backup.store.s3;
 
 import java.io.InputStream;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
@@ -9,9 +10,11 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 import org.apache.hadoop.util.ReflectionUtils;
 
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
@@ -151,6 +154,64 @@ public class S3BackupStore extends BackupStore {
     } finally {
       releaseAmazonS3Client(client);
     }
+  }
+
+  /**
+   * For testing.
+   */
+  static void removeBucket(String bucketName) throws Exception {
+    removeAllObjects(bucketName);
+    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
+    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
+    client.deleteBucket(bucketName);
+  }
+
+  /**
+   * For testing.
+   */
+  static void removeAllObjects(String bucketName) throws Exception {
+    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
+    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
+    ObjectListing listObjects = client.listObjects(bucketName);
+    List<S3ObjectSummary> objectSummaries = listObjects.getObjectSummaries();
+    for (S3ObjectSummary objectSummary : objectSummaries) {
+      String key = objectSummary.getKey();
+      client.deleteObject(bucketName, key);
+    }
+  }
+
+  /**
+   * For testing.
+   */
+  static void removeAllObjects(String bucketName, String prefix) throws Exception {
+    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
+    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
+    ObjectListing listObjects = client.listObjects(bucketName);
+    List<S3ObjectSummary> objectSummaries = listObjects.getObjectSummaries();
+    for (S3ObjectSummary objectSummary : objectSummaries) {
+      String key = objectSummary.getKey();
+      if (key.startsWith(prefix)) {
+        client.deleteObject(bucketName, key);
+      }
+    }
+  }
+
+  /**
+   * For testing.
+   */
+  static boolean exists(String bucketName) throws Exception {
+    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
+    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
+    return client.doesBucketExist(bucketName);
+  }
+
+  /**
+   * For testing.
+   */
+  static void createBucket(String bucketName) throws Exception {
+    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
+    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
+    client.createBucket(bucketName);
   }
 
 }
