@@ -4,6 +4,8 @@ This project actively backs up the blocks created in the HDFS cluster to an exte
 
 The primary reasoning for using HDFS in this way over a straight S3 access is that with HDFS you have certain file system guarantees (atomic renames, snapshots, etc).
 
+In the projects current state the blocks are replicated from the DataNodes to the backup store and if the NameNode detects a missing block it will request that one of the DataNodes restore the block from the backup store.  After the block has been finalized on the DataNode the NameNode is contacted with the updated block information.
+
 ## S3 Backup Setup
 
 ### Install
