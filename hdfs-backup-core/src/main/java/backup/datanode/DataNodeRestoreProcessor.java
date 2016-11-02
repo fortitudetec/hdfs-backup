@@ -9,12 +9,10 @@ import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY;
 import static backup.BackupConstants.LOCKS;
 import static backup.BackupConstants.RESTORE;
 
-import java.io.Closeable;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -38,21 +36,19 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.MapMaker;
 
 import backup.BackupExtendedBlock;
+import backup.BaseProcessor;
 import backup.store.BackupStore;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
 
-public class DataNodeRestoreProcessor implements Runnable, Closeable {
-
+public class DataNodeRestoreProcessor extends BaseProcessor {
 
   private final static Logger LOG = LoggerFactory.getLogger(DataNodeRestoreProcessor.class);
 
   private final static Map<DataNode, DataNodeRestoreProcessor> INSTANCES = new MapMaker().makeMap();
 
   private final DataNode datanode;
-  private final Thread thread;
-  private final AtomicBoolean running = new AtomicBoolean(true);
   private final BackupStore backupStore;
   private final ZooKeeperClient zooKeeper;
   private final ZooKeeperLockManager lockManager;
@@ -80,13 +76,14 @@ public class DataNodeRestoreProcessor implements Runnable, Closeable {
   }
 
   private DataNodeRestoreProcessor(Configuration conf, DataNode datanode) throws Exception {
+    super();
     this.datanode = datanode;
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);
     this.bytesPerChecksum = conf.getInt(DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_KEY,
         DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_DEFAULT);
-    this.checksumType = Type
-        .valueOf(conf.get(DFSConfigKeys.DFS_CHECKSUM_TYPE_KEY, DFSConfigKeys.DFS_CHECKSUM_TYPE_DEFAULT));
+    this.checksumType = Type.valueOf(
+        conf.get(DFSConfigKeys.DFS_CHECKSUM_TYPE_KEY, DFSConfigKeys.DFS_CHECKSUM_TYPE_DEFAULT));
     int zkSessionTimeout = conf.getInt(DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY, 30000);
     String zkConnectionString = conf.get(DFS_BACKUP_ZOOKEEPER_CONNECTION);
     if (zkConnectionString == null) {
@@ -100,32 +97,18 @@ public class DataNodeRestoreProcessor implements Runnable, Closeable {
         BackupStore.class);
     backupStore = ReflectionUtils.newInstance(clazz, conf);
     backupStore.init();
-
-    this.thread = new Thread(this);
-    thread.setDaemon(true);
-    thread.setName(getClass().getName());
-    thread.start();
+    start();
   }
 
   @Override
-  public void close() {
+  protected void closeInternal() {
     IOUtils.closeQuietly(lockManager);
     IOUtils.closeQuietly(zooKeeper);
-    running.set(false);
-    thread.interrupt();
   }
 
   @Override
-  public void run() {
-    while (isRunning()) {
-      try {
-        restoreBlocks();
-      } catch (Throwable t) {
-        if (isRunning()) {
-          LOG.error("unknown error", t);
-        }
-      }
-    }
+  protected void runInternal() throws Exception {
+    restoreBlocks();
   }
 
   public void restoreBlocks() throws Exception {
@@ -199,9 +182,4 @@ public class DataNodeRestoreProcessor implements Runnable, Closeable {
       }
     }
   }
-
-  private boolean isRunning() {
-    return running.get();
-  }
-
 }

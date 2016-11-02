@@ -1,12 +1,25 @@
 package backup.store;
 
+import static backup.BackupConstants.DFS_BACKUP_STORE_DEFAULT;
+import static backup.BackupConstants.DFS_BACKUP_STORE_KEY;
+
 import java.io.InputStream;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
+import org.apache.hadoop.util.ReflectionUtils;
 
 public abstract class BackupStore extends Configured {
+
+  public static BackupStore create(Configuration conf) throws Exception {
+    Class<? extends BackupStore> clazz = conf.getClass(DFS_BACKUP_STORE_KEY, DFS_BACKUP_STORE_DEFAULT,
+        BackupStore.class);
+    BackupStore backupStore = ReflectionUtils.newInstance(clazz, conf);
+    backupStore.init();
+    return backupStore;
+  }
 
   public abstract void init() throws Exception;
 
@@ -34,4 +47,10 @@ public abstract class BackupStore extends Configured {
    */
   public abstract InputStream getDataInputStream(ExtendedBlock extendedBlock) throws Exception;
 
+  public abstract ExtendedBlockEnum getExtendedBlocks() throws Exception;
+
+  /**
+   * Removes block from the backup store.
+   */
+  public abstract void deleteBlock(ExtendedBlock extendedBlock) throws Exception;
 }

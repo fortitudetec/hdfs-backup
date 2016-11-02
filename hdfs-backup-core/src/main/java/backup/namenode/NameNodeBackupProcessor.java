@@ -8,13 +8,11 @@ import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY;
 import static backup.BackupConstants.LOCKS;
 import static backup.BackupConstants.RESTORE;
 
-import java.io.Closeable;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -34,23 +32,23 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.MapMaker;
 
 import backup.BackupExtendedBlock;
+import backup.BaseProcessor;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
 
-public class NameNodeBackupProcessor implements Runnable, Closeable {
+public class NameNodeBackupProcessor extends BaseProcessor {
 
   private final static Logger LOG = LoggerFactory.getLogger(NameNodeBackupProcessor.class);
 
   private final static Map<NameNode, NameNodeBackupProcessor> INSTANCES = new MapMaker().makeMap();
 
   private final NameNode namenode;
-  private final Thread thread;
-  private final AtomicBoolean running = new AtomicBoolean(true);
   private final ZooKeeperClient zooKeeper;
   private final ZooKeeperLockManager lockManager;
   private final long pollTime;
   private final Set<ExtendedBlock> currentRequestedRestore;
+  private final NameNodeBackupBlockCheckProcessor blockCheck;
 
   public static synchronized NameNodeBackupProcessor newInstance(Configuration conf, NameNode namenode)
       throws Exception {
@@ -65,7 +63,9 @@ public class NameNodeBackupProcessor implements Runnable, Closeable {
   private NameNodeBackupProcessor(Configuration conf, NameNode namenode) throws Exception {
     this.namenode = namenode;
 
-    Cache<ExtendedBlock, Boolean> cache = CacheBuilder.newBuilder().expireAfterWrite(1, TimeUnit.MINUTES).build();
+    Cache<ExtendedBlock, Boolean> cache = CacheBuilder.newBuilder()
+                                                      .expireAfterWrite(1, TimeUnit.MINUTES)
+                                                      .build();
     currentRequestedRestore = Collections.newSetFromMap(cache.asMap());
 
     int zkSessionTimeout = conf.getInt(DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY,
@@ -81,32 +81,21 @@ public class NameNodeBackupProcessor implements Runnable, Closeable {
     ZkUtils.mkNodesStr(zooKeeper, ZkUtils.createPath(RESTORE));
 
     lockManager = new ZooKeeperLockManager(zooKeeper, ZkUtils.createPath(LOCKS));
-    this.thread = new Thread(this);
-    thread.setDaemon(true);
-    thread.setName(getClass().getName());
-    thread.start();
+    blockCheck = new NameNodeBackupBlockCheckProcessor(conf, zooKeeper, this);
+    start();
   }
 
   @Override
-  public void close() {
+  protected void closeInternal() {
+    IOUtils.closeQuietly(blockCheck);
     IOUtils.closeQuietly(lockManager);
     IOUtils.closeQuietly(zooKeeper);
-    running.set(false);
-    thread.interrupt();
   }
 
   @Override
-  public void run() {
-    while (isRunning()) {
-      try {
-        if (!checkForBlocksToRestore()) {
-          Thread.sleep(pollTime);
-        }
-      } catch (Throwable t) {
-        if (isRunning()) {
-          LOG.error("unknown error", t);
-        }
-      }
+  protected void runInternal() throws Exception {
+    if (!checkForBlocksToRestore()) {
+      Thread.sleep(pollTime);
     }
   }
 
@@ -128,7 +117,7 @@ public class NameNodeBackupProcessor implements Runnable, Closeable {
     return atLeastOneRestoreRequest;
   }
 
-  private void requestRestore(ExtendedBlock extendedBlock) throws Exception {
+  public synchronized void requestRestore(ExtendedBlock extendedBlock) throws Exception {
     String path = ZkUtils.createPath(RESTORE, Long.toString(extendedBlock.getBlockId()));
     Stat stat = zooKeeper.exists(path, false);
     if (stat == null) {
@@ -141,8 +130,8 @@ public class NameNodeBackupProcessor implements Runnable, Closeable {
     return currentRequestedRestore.contains(extendedBlock);
   }
 
-  private boolean isRunning() {
-    return running.get();
+  public void runBlockCheck() throws Exception {
+    this.blockCheck.runBlockCheck();
   }
 
 }

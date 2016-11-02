@@ -8,7 +8,8 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 public class DevNullBackupStore extends BackupStore {
 
   @Override
-  public void backupBlock(ExtendedBlock extendedBlock, LengthInputStream data, LengthInputStream meta) throws Exception {
+  public void backupBlock(ExtendedBlock extendedBlock, LengthInputStream data, LengthInputStream meta)
+      throws Exception {
 
   }
 
@@ -29,6 +30,16 @@ public class DevNullBackupStore extends BackupStore {
 
   @Override
   public void init() throws Exception {
+
+  }
+
+  @Override
+  public ExtendedBlockEnum getExtendedBlocks() {
+    return ExtendedBlockEnum.EMPTY;
+  }
+
+  @Override
+  public void deleteBlock(ExtendedBlock extendedBlock) {
 
   }
 

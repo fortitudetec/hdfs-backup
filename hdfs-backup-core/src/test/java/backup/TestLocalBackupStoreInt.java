@@ -7,13 +7,13 @@ import org.junit.Test;
 
 import backup.store.LocalBackupStore;
 
-public class TestLocalBackupStore extends MiniClusterTestBase {
+public class TestLocalBackupStoreInt extends MiniClusterTestBase {
 
   private final File backup = new File(tmp, "backup");
 
   @Test
-  public void test() {
-
+  public void noTest() throws Exception {
+    
   }
 
   @Override

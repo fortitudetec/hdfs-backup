@@ -1,38 +1,53 @@
 package backup.store.s3;
 
+import static org.junit.Assert.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import backup.BackupConstants;
-import backup.MiniClusterTestBase;
+import backup.store.BackupStore;
+import backup.store.ExtendedBlockEnum;
 
-public class TestS3BackupStore extends MiniClusterTestBase {
+public class TestS3BackupStore {
 
-  private final String backupBucket = "test-hdfs-backup-bucket";
-  private final String prefix = "test-hdfs-backup-" + UUID.randomUUID()
-                                                          .toString();
-  private boolean createdBucket;
-  
-  @Test
-  public void test() {
-    
-  }
+  private static final Configuration conf = new Configuration();
+  private static final String backupBucket = "test-hdfs-backup-bucket";
+  private static final String prefix = "test-hdfs-backup-" + UUID.randomUUID()
+                                                                 .toString();
 
-  @Override
-  protected void setupBackupStore(Configuration conf) throws Exception {
+  private static boolean createdBucket;
+  private ThreadLocal<Random> random = new ThreadLocal<Random>() {
+    @Override
+    protected Random initialValue() {
+      return new Random();
+    }
+  };
+
+  @BeforeClass
+  public static void setup() throws Exception {
     conf.set(BackupConstants.DFS_BACKUP_STORE_KEY, S3BackupStore.class.getName());
-    conf.set(S3BackupStore.DFS_BACKUP_S3_BUCKET_NAME, backupBucket);
-    conf.set(S3BackupStore.DFS_BACKUP_S3_OBJECT_PREFIX, prefix);
+    conf.set(S3BackupStore.DFS_BACKUP_S3_BUCKET_NAME_KEY, backupBucket);
+    conf.set(S3BackupStore.DFS_BACKUP_S3_OBJECT_PREFIX_KEY, prefix);
+    conf.setInt(S3BackupStore.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, 9);
     if (!S3BackupStore.exists(backupBucket)) {
       S3BackupStore.createBucket(backupBucket);
       createdBucket = true;
     }
   }
 
-  @Override
-  protected void teardownBackupStore() throws Exception {
+  @AfterClass
+  public static void teardown() throws Exception {
     if (createdBucket) {
       S3BackupStore.removeBucket(backupBucket);
     } else {
@@ -40,4 +55,52 @@ public class TestS3BackupStore extends MiniClusterTestBase {
     }
   }
 
+  @Test
+  public void testHasBlock() throws Exception {
+    BackupStore backupStore = BackupStore.create(conf);
+    String poolId = "poolid";
+    ExtendedBlock extendedBlock = createExtendedBlock(poolId);
+    backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getNumBytes()),
+        createInputStream(extendedBlock.getNumBytes()));
+    assertTrue(backupStore.hasBlock(extendedBlock));
+  }
+
+  @Test
+  public void testGetExtendedBlocks() throws Exception {
+    BackupStore backupStore = BackupStore.create(conf);
+    String poolId = "poolid";
+    List<ExtendedBlock> blocks = new ArrayList<>();
+    for (int i = 0; i < 100; i++) {
+      ExtendedBlock extendedBlock = createExtendedBlock(poolId);
+      backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getNumBytes()),
+          createInputStream(extendedBlock.getNumBytes()));
+      blocks.add(extendedBlock);
+    }
+    Thread.sleep(1000);
+    ExtendedBlockEnum extendedBlocks = backupStore.getExtendedBlocks();
+    ExtendedBlock block;
+    List<ExtendedBlock> remoteBlocks = new ArrayList<>();
+    while ((block = extendedBlocks.next()) != null) {
+      remoteBlocks.add(block);
+    }
+
+    for (ExtendedBlock extendedBlock : blocks) {
+      assertTrue(remoteBlocks.contains(extendedBlock));
+    }
+  }
+
+  private ExtendedBlock createExtendedBlock(String poolId) {
+    Random rand = random.get();
+    long blkid = rand.nextLong();
+    long len = rand.nextInt(1000);
+    long genstamp = rand.nextInt(2000);
+    return new ExtendedBlock(poolId, blkid, len, genstamp);
+  }
+
+  private LengthInputStream createInputStream(long len) {
+    byte[] buf = new byte[(int) len];
+    random.get()
+          .nextBytes(buf);
+    return new LengthInputStream(new ByteArrayInputStream(buf), len);
+  }
 }
