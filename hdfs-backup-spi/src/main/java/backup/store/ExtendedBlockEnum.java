@@ -4,8 +4,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Iterator;
 
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-
 public interface ExtendedBlockEnum extends Closeable {
 
   public static ExtendedBlockEnum EMPTY = new ExtendedBlockEnum() {

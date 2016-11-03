@@ -2,8 +2,6 @@ package backup.datanode;
 
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY;
-import static backup.BackupConstants.DFS_BACKUP_STORE_DEFAULT;
-import static backup.BackupConstants.DFS_BACKUP_STORE_KEY;
 import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION;
 import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY;
 import static backup.BackupConstants.LOCKS;
@@ -12,13 +10,10 @@ import static backup.BackupConstants.RESTORE;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaHandler;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaInPipelineInterface;
@@ -26,18 +21,18 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.ReplicaOutputStreams;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.DataChecksum.Type;
-import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.MapMaker;
-
 import backup.BackupExtendedBlock;
 import backup.BaseProcessor;
 import backup.store.BackupStore;
+import backup.store.ConfigurationConverter;
+import backup.store.ExtendedBlockConverter;
+import backup.store.ExtendedBlock;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
@@ -45,8 +40,6 @@ import backup.zookeeper.ZooKeeperLockManager;
 public class DataNodeRestoreProcessor extends BaseProcessor {
 
   private final static Logger LOG = LoggerFactory.getLogger(DataNodeRestoreProcessor.class);
-
-  private final static Map<DataNode, DataNodeRestoreProcessor> INSTANCES = new MapMaker().makeMap();
 
   private final DataNode datanode;
   private final BackupStore backupStore;
@@ -65,17 +58,7 @@ public class DataNodeRestoreProcessor extends BaseProcessor {
     }
   };
 
-  public static synchronized DataNodeRestoreProcessor newInstance(Configuration conf, DataNode datanode)
-      throws Exception {
-    DataNodeRestoreProcessor processor = INSTANCES.get(datanode);
-    if (processor == null) {
-      processor = new DataNodeRestoreProcessor(conf, datanode);
-      INSTANCES.put(datanode, processor);
-    }
-    return processor;
-  }
-
-  private DataNodeRestoreProcessor(Configuration conf, DataNode datanode) throws Exception {
+  public DataNodeRestoreProcessor(Configuration conf, DataNode datanode) throws Exception {
     super();
     this.datanode = datanode;
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
@@ -93,10 +76,7 @@ public class DataNodeRestoreProcessor extends BaseProcessor {
     ZkUtils.mkNodesStr(zooKeeper, ZkUtils.createPath(LOCKS));
     lockManager = new ZooKeeperLockManager(zooKeeper, ZkUtils.createPath(LOCKS));
 
-    Class<? extends BackupStore> clazz = conf.getClass(DFS_BACKUP_STORE_KEY, DFS_BACKUP_STORE_DEFAULT,
-        BackupStore.class);
-    backupStore = ReflectionUtils.newInstance(clazz, conf);
-    backupStore.init();
+    backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
     start();
   }
 
@@ -144,7 +124,8 @@ public class DataNodeRestoreProcessor extends BaseProcessor {
       return;
     }
     FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
-    if (fsDataset.isValidBlock(extendedBlock)) {
+    org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = ExtendedBlockConverter.toHadoop(extendedBlock);
+    if (fsDataset.isValidBlock(heb)) {
       LOG.info("Block already restored {}", extendedBlock);
       return;
     }
@@ -152,9 +133,11 @@ public class DataNodeRestoreProcessor extends BaseProcessor {
     if (lockManager.tryToLock(blockId)) {
       try {
         LOG.info("Restoring block {}", extendedBlock);
-        StorageType storageType = StorageType.DEFAULT;
         boolean allowLazyPersist = true;
-        ReplicaHandler replicaHandler = fsDataset.createRbw(storageType, extendedBlock, allowLazyPersist);
+        // org.apache.hadoop.fs.StorageType storageType =
+        // org.apache.hadoop.fs.StorageType.DEFAULT;
+        org.apache.hadoop.hdfs.StorageType storageType = org.apache.hadoop.hdfs.StorageType.DEFAULT;
+        ReplicaHandler replicaHandler = fsDataset.createRbw(storageType, heb, allowLazyPersist);
         ReplicaInPipelineInterface pipelineInterface = replicaHandler.getReplica();
         boolean isCreate = true;
         DataChecksum requestedChecksum = DataChecksum.newDataChecksum(checksumType, bytesPerChecksum);
@@ -175,11 +158,17 @@ public class DataNodeRestoreProcessor extends BaseProcessor {
         }
         pipelineInterface.setNumBytes(bytesCopied);
         LOG.info("Finalizing restored block {}", extendedBlock);
-        fsDataset.finalizeBlock(extendedBlock);
-        datanode.notifyNamenodeReceivedBlock(extendedBlock, "", pipelineInterface.getStorageUuid());
+        fsDataset.finalizeBlock(heb);
+
+        // datanode.notifyNamenodeReceivedBlock(extendedBlock, "",
+        // pipelineInterface.getStorageUuid();
+        datanode.notifyNamenodeReceivedBlock(heb, "", pipelineInterface.getStorageUuid(),
+            pipelineInterface.isOnTransientStorage());
+
       } finally {
         lockManager.unlock(blockId);
       }
     }
   }
+
 }

@@ -24,7 +24,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DFSClient;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.zookeeper.CreateMode;
@@ -35,6 +34,9 @@ import org.slf4j.LoggerFactory;
 import backup.BackupExtendedBlocks;
 import backup.BaseProcessor;
 import backup.store.BackupStore;
+import backup.store.ConfigurationConverter;
+import backup.store.ExtendedBlockConverter;
+import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
 import backup.store.ExternalExtendedBlockSort;
 import backup.zookeeper.ZkUtils;
@@ -62,7 +64,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     this.conf = conf;
     this.zooKeeper = zooKeeper;
     this.processor = processor;
-    backupStore = BackupStore.create(conf);
+    backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
     this.fileSystem = (DistributedFileSystem) FileSystem.get(conf);
     this.checkInterval = conf.getLong(DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_KEY,
         DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DEFAULT);
@@ -241,7 +243,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       long length = fs.getLen();
       LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
       for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
-        nameNodeBlocks.add(locatedBlock.getBlock());
+        nameNodeBlocks.add(ExtendedBlockConverter.fromHadoop(locatedBlock.getBlock()));
       }
     }
     return nameNodeBlocks;

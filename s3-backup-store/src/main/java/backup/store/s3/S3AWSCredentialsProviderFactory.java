@@ -1,8 +1,8 @@
 package backup.store.s3;
 
-import org.apache.hadoop.conf.Configured;
-
 import com.amazonaws.auth.AWSCredentialsProvider;
+
+import backup.store.Configured;
 
 public abstract class S3AWSCredentialsProviderFactory extends Configured {
 

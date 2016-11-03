@@ -2,9 +2,6 @@ package backup.store;
 
 import java.io.InputStream;
 
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
-
 public class DevNullBackupStore extends BackupStore {
 
   @Override

@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.data.Stat;
@@ -18,6 +17,7 @@ import com.google.common.collect.ImmutableSet;
 
 import backup.BackupExtendedBlocks;
 import backup.BaseProcessor;
+import backup.store.ExtendedBlock;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 

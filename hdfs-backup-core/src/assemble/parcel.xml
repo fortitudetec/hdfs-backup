@@ -10,19 +10,16 @@
 
   <dependencySets>
     <dependencySet>
-      <useProjectArtifact>false</useProjectArtifact>
-      <outputDirectory>${parcel.name}-${project.version}/lib</outputDirectory>
+      <useProjectArtifact>true</useProjectArtifact>
+      <outputDirectory>${parcel.name}-${parcel.version}/lib</outputDirectory>
       <unpack>false</unpack>
-      <includes>
-        <include>s3-backup-store:*</include>
-      </includes>
     </dependencySet>
   </dependencySets>
 
   <fileSets>
     <fileSet>
       <directory>${project.basedir}/src/assemble/parcel/meta</directory>
-      <outputDirectory>${parcel.name}-${project.version}/meta</outputDirectory>
+      <outputDirectory>${parcel.name}-${parcel.version}/meta</outputDirectory>
       <excludes>
         <exclude>**/.empty</exclude>
         <exclude>**/parcel.json</exclude>
@@ -33,7 +30,7 @@
   <files>
     <file>
       <source>${project.basedir}/src/assemble/parcel/meta/parcel.json</source>
-      <outputDirectory>${parcel.name}-${project.version}/meta</outputDirectory>
+      <outputDirectory>${parcel.name}-${parcel.version}/meta</outputDirectory>
       <destName>parcel.json</destName>
       <filtered>true</filtered>
     </file>

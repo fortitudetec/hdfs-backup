@@ -7,6 +7,8 @@ import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.util.ServicePlugin;
 
+import backup.SingletonManager;
+
 public class DataNodeBackupServicePlugin extends Configured implements ServicePlugin {
 
   private DataNodeBackupProcessor backupProcessor;
@@ -17,8 +19,11 @@ public class DataNodeBackupServicePlugin extends Configured implements ServicePl
     DataNode datanode = (DataNode) service;
     // This object is created here so that it's lifecycle follows the datanode
     try {
-      backupProcessor = DataNodeBackupProcessor.newInstance(getConf(), datanode);
-      restoreProcessor = DataNodeRestoreProcessor.newInstance(getConf(), datanode);
+      backupProcessor = SingletonManager.getManager(DataNodeBackupProcessor.class)
+                                        .getInstance(datanode, () -> new DataNodeBackupProcessor(getConf(), datanode));
+      restoreProcessor = SingletonManager.getManager(DataNodeRestoreProcessor.class)
+                                         .getInstance(datanode,
+                                             () -> new DataNodeRestoreProcessor(getConf(), datanode));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

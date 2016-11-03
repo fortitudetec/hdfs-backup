@@ -13,7 +13,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.SequenceFile.Reader;
@@ -71,9 +70,10 @@ public class ExternalExtendedBlockSort implements Closeable {
   }
 
   public void add(ExtendedBlock extendedBlock) throws IOException {
-    Writer writer = getWriter(extendedBlock.getBlockPoolId());
-    writer.append(new ComparableBlock(extendedBlock.getBlockId(), extendedBlock.getNumBytes(),
-        extendedBlock.getGenerationStamp()), value);
+    Writer writer = getWriter(extendedBlock.getPoolId());
+    writer.append(
+        new ComparableBlock(extendedBlock.getBlockId(), extendedBlock.getLength(), extendedBlock.getGenerationStamp()),
+        value);
   }
 
   private Writer getWriter(String blockPoolId) throws IOException {

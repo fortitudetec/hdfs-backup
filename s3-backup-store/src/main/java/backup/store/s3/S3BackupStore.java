@@ -5,10 +5,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
-import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.commons.configuration.BaseConfiguration;
+import org.apache.commons.configuration.Configuration;
 
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.s3.AmazonS3Client;
@@ -26,9 +24,11 @@ import com.google.common.collect.ImmutableMap.Builder;
 
 import backup.BackupConstants;
 import backup.store.BackupStore;
+import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
+import backup.store.LengthInputStream;
+import backup.store.ReflectionUtils;
 
-@SuppressWarnings("unchecked")
 public class S3BackupStore extends BackupStore {
 
   enum FileType {
@@ -36,20 +36,17 @@ public class S3BackupStore extends BackupStore {
   }
 
   public static final String DFS_BACKUP_S3_BUCKET_NAME_KEY = "dfs.backup.s3.bucket.name";
-
   public static final String DFS_BACKUP_S3_OBJECT_PREFIX_KEY = "dfs.backup.s3.object.prefix";
-
   public static final String DFS_BACKUP_S3_LISTING_MAXKEYS_KEY = "dfs.backup.s3.listing.maxkeys";
+  public static final String DFS_BACKUP_S3_ENDPOINT = "dfs.backup.s3.endpoint";
   public static final int DFS_BACKUP_S3_LISTING_MAXKEYS_DEFAULT = 10000;
-
   public static final String DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_KEY = "dfs.backup.s3.credentials.provider.factory";
-  public static final Class<? extends S3AWSCredentialsProviderFactory> DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_DEFAULT = DefaultS3AWSCredentialsProviderFactory.class;
+  public static final String DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_DEFAULT = DefaultS3AWSCredentialsProviderFactory.class.getName();
 
   private static final String NUM_BYTES = "numBytes";
   private static final String GEN_STAMP = "genStamp";
   private static final String BLOCK_ID = "blockId";
   private static final String BLOCK_POOL_ID = "blockPoolId";
-  private static final String BLOCK_NAME = "blockName";
   private static final Joiner JOINER = Joiner.on('/');
   private static final Splitter SPLITTER = Splitter.on('/');
 
@@ -73,11 +70,11 @@ public class S3BackupStore extends BackupStore {
       System.out.println(objectSummary.getKey());
     }
 
-    Configuration conf = new Configuration();
-    conf.set(BackupConstants.DFS_BACKUP_STORE_KEY, S3BackupStore.class.getName());
-    conf.set(S3BackupStore.DFS_BACKUP_S3_BUCKET_NAME_KEY, bucketName);
-    conf.set(S3BackupStore.DFS_BACKUP_S3_OBJECT_PREFIX_KEY, "test-hdfs-backup-debug");
-    conf.setInt(S3BackupStore.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, 5);
+    Configuration conf = new BaseConfiguration();
+    conf.setProperty(BackupConstants.DFS_BACKUP_STORE_KEY, S3BackupStore.class.getName());
+    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_BUCKET_NAME_KEY, bucketName);
+    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_OBJECT_PREFIX_KEY, "test-hdfs-backup-debug");
+    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, 5);
 
     BackupStore backupStore = BackupStore.create(conf);
 
@@ -95,13 +92,25 @@ public class S3BackupStore extends BackupStore {
   @Override
   public void init() throws Exception {
     Configuration conf = getConf();
-    Class<? extends S3AWSCredentialsProviderFactory> clazz = (Class<? extends S3AWSCredentialsProviderFactory>) conf.getClass(
-        DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_KEY, DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_DEFAULT);
+
+    String classname = conf.getString(DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_KEY,
+        DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_DEFAULT);
+
+    Class<? extends S3AWSCredentialsProviderFactory> clazz = getCredentialsProviderFactory(classname);
+
     credentialsProviderFactory = ReflectionUtils.newInstance(clazz, conf);
-    bucketName = conf.get(DFS_BACKUP_S3_BUCKET_NAME_KEY);
-    objectPrefix = conf.get(DFS_BACKUP_S3_OBJECT_PREFIX_KEY);
+    bucketName = conf.getString(DFS_BACKUP_S3_BUCKET_NAME_KEY);
+    objectPrefix = conf.getString(DFS_BACKUP_S3_OBJECT_PREFIX_KEY);
     maxKeys = conf.getInt(DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, DFS_BACKUP_S3_LISTING_MAXKEYS_DEFAULT);
     s3Client = new AmazonS3Client(credentialsProviderFactory.getCredentials());
+    s3Client.setEndpoint(conf.getString(DFS_BACKUP_S3_ENDPOINT, s3Client.getEndpointPrefix()));
+  }
+
+  @SuppressWarnings("unchecked")
+  private Class<? extends S3AWSCredentialsProviderFactory> getCredentialsProviderFactory(String classname)
+      throws ClassNotFoundException {
+    return (Class<? extends S3AWSCredentialsProviderFactory>) getClass().getClassLoader()
+                                                                        .loadClass(classname);
   }
 
   protected AmazonS3Client getAmazonS3Client() throws Exception {
@@ -210,7 +219,7 @@ public class S3BackupStore extends BackupStore {
         if (client.doesObjectExist(bucketName, dataKey)) {
           ObjectMetadata objectMetadata = client.getObjectMetadata(bucketName, dataKey);
           long contentLength = objectMetadata.getContentLength();
-          return extendedBlock.getNumBytes() == contentLength;
+          return extendedBlock.getLength() == contentLength;
         }
       }
       return false;
@@ -261,11 +270,10 @@ public class S3BackupStore extends BackupStore {
 
   protected Map<String, String> toUserMetadata(ExtendedBlock extendedBlock) {
     Builder<String, String> builder = ImmutableMap.builder();
-    builder.put(BLOCK_NAME, extendedBlock.getBlockName());
-    builder.put(BLOCK_POOL_ID, extendedBlock.getBlockPoolId());
+    builder.put(BLOCK_POOL_ID, extendedBlock.getPoolId());
     builder.put(BLOCK_ID, Long.toString(extendedBlock.getBlockId()));
     builder.put(GEN_STAMP, Long.toString(extendedBlock.getGenerationStamp()));
-    builder.put(NUM_BYTES, Long.toString(extendedBlock.getNumBytes()));
+    builder.put(NUM_BYTES, Long.toString(extendedBlock.getLength()));
     return builder.build();
   }
 
@@ -279,11 +287,11 @@ public class S3BackupStore extends BackupStore {
 
   public static String getBaseKey(ExtendedBlock extendedBlock, FileType fileType, String objectPrefix) {
     if (objectPrefix == null) {
-      return JOINER.join(fileType.name(), extendedBlock.getBlockPoolId(), extendedBlock.getBlockId(),
-          extendedBlock.getGenerationStamp(), extendedBlock.getNumBytes());
+      return JOINER.join(fileType.name(), extendedBlock.getPoolId(), extendedBlock.getBlockId(),
+          extendedBlock.getGenerationStamp(), extendedBlock.getLength());
     } else {
-      return JOINER.join(objectPrefix, fileType.name(), extendedBlock.getBlockPoolId(), extendedBlock.getBlockId(),
-          extendedBlock.getGenerationStamp(), extendedBlock.getNumBytes());
+      return JOINER.join(objectPrefix, fileType.name(), extendedBlock.getPoolId(), extendedBlock.getBlockId(),
+          extendedBlock.getGenerationStamp(), extendedBlock.getLength());
     }
   }
 

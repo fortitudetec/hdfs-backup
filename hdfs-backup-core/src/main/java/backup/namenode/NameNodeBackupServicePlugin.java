@@ -7,6 +7,8 @@ import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.util.ServicePlugin;
 
+import backup.SingletonManager;
+
 public class NameNodeBackupServicePlugin extends Configured implements ServicePlugin {
 
   private NameNodeBackupProcessor backupProcessor;
@@ -16,7 +18,8 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     NameNode namenode = (NameNode) service;
     // This object is created here so that it's lifecycle follows the namenode
     try {
-      backupProcessor = NameNodeBackupProcessor.newInstance(getConf(), namenode);
+      backupProcessor = SingletonManager.getManager(NameNodeBackupProcessor.class)
+                                        .getInstance(namenode, () -> new NameNodeBackupProcessor(getConf(), namenode));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

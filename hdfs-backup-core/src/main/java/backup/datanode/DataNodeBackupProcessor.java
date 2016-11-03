@@ -12,7 +12,6 @@ import static backup.BackupConstants.LOCKS;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -21,17 +20,17 @@ import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
-import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.MapMaker;
-
 import backup.BaseProcessor;
 import backup.store.BackupStore;
+import backup.store.ConfigurationConverter;
+import backup.store.ExtendedBlockConverter;
+import backup.store.ExtendedBlock;
+import backup.store.LengthInputStream;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
@@ -39,8 +38,6 @@ import backup.zookeeper.ZooKeeperLockManager;
 public class DataNodeBackupProcessor extends BaseProcessor {
 
   private final static Logger LOG = LoggerFactory.getLogger(DataNodeBackupProcessor.class);
-
-  private final static Map<DataNode, DataNodeBackupProcessor> INSTANCES = new MapMaker().makeMap();
 
   private final DataNode datanode;
   private final BlockingQueue<ExtendedBlock> finializedBlocks = new LinkedBlockingQueue<>();
@@ -68,17 +65,7 @@ public class DataNodeBackupProcessor extends BaseProcessor {
     }
   }
 
-  public static synchronized DataNodeBackupProcessor newInstance(Configuration conf, DataNode datanode)
-      throws Exception {
-    DataNodeBackupProcessor processor = INSTANCES.get(datanode);
-    if (processor == null) {
-      processor = new DataNodeBackupProcessor(conf, datanode);
-      INSTANCES.put(datanode, processor);
-    }
-    return processor;
-  }
-
-  private DataNodeBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
+  public DataNodeBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
     this.datanode = datanode;
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);
@@ -99,7 +86,7 @@ public class DataNodeBackupProcessor extends BaseProcessor {
     ZkUtils.mkNodesStr(zooKeeper, ZkUtils.createPath(LOCKS));
     lockManager = new ZooKeeperLockManager(zooKeeper, ZkUtils.createPath(LOCKS));
 
-    backupStore = BackupStore.create(conf);
+    backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
     remoteRequestProcessor = new DataNodeBackupRemoteRequestProcessor(zooKeeper, this, conf);
     start();
   }
@@ -176,11 +163,13 @@ public class DataNodeBackupProcessor extends BaseProcessor {
     if (lockManager.tryToLock(blockId)) {
       try {
         FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
-        BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(extendedBlock);
+        org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = ExtendedBlockConverter.toHadoop(extendedBlock);
+        BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(heb);
         long numBytes = blockLocalPathInfo.getNumBytes();
-        try (
-            LengthInputStream data = new LengthInputStream(fsDataset.getBlockInputStream(extendedBlock, 0), numBytes)) {
-          try (LengthInputStream meta = fsDataset.getMetaDataInputStream(extendedBlock)) {
+        try (LengthInputStream data = new LengthInputStream(fsDataset.getBlockInputStream(heb, 0), numBytes)) {
+          org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta = fsDataset.getMetaDataInputStream(
+              heb);
+          try (LengthInputStream meta = new LengthInputStream(tmeta, tmeta.getLength())) {
             backupStore.backupBlock(extendedBlock, data, meta);
           }
         }
@@ -219,7 +208,7 @@ public class DataNodeBackupProcessor extends BaseProcessor {
     FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
     boolean backupOccured = false;
     for (ExtendedBlock extendedBlock : blocks) {
-      if (fsDataset.getVolume(extendedBlock) != null) {
+      if (fsDataset.getVolume(ExtendedBlockConverter.toHadoop(extendedBlock)) != null) {
         // This datanode has the block
         backupBlock(extendedBlock);
         backupOccured = true;

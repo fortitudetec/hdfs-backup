@@ -8,20 +8,21 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
+import org.apache.commons.configuration.BaseConfiguration;
+import org.apache.commons.configuration.Configuration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import backup.BackupConstants;
 import backup.store.BackupStore;
+import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
+import backup.store.LengthInputStream;
 
 public class TestS3BackupStore {
 
-  private static final Configuration conf = new Configuration();
+  private static final Configuration conf = new BaseConfiguration();
   private static final String backupBucket = "test-hdfs-backup-bucket";
   private static final String prefix = "test-hdfs-backup-" + UUID.randomUUID()
                                                                  .toString();
@@ -36,10 +37,10 @@ public class TestS3BackupStore {
 
   @BeforeClass
   public static void setup() throws Exception {
-    conf.set(BackupConstants.DFS_BACKUP_STORE_KEY, S3BackupStore.class.getName());
-    conf.set(S3BackupStore.DFS_BACKUP_S3_BUCKET_NAME_KEY, backupBucket);
-    conf.set(S3BackupStore.DFS_BACKUP_S3_OBJECT_PREFIX_KEY, prefix);
-    conf.setInt(S3BackupStore.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, 9);
+    conf.setProperty(BackupConstants.DFS_BACKUP_STORE_KEY, S3BackupStore.class.getName());
+    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_BUCKET_NAME_KEY, backupBucket);
+    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_OBJECT_PREFIX_KEY, prefix);
+    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, 9);
     if (!S3BackupStore.exists(backupBucket)) {
       S3BackupStore.createBucket(backupBucket);
       createdBucket = true;
@@ -60,8 +61,8 @@ public class TestS3BackupStore {
     BackupStore backupStore = BackupStore.create(conf);
     String poolId = "poolid";
     ExtendedBlock extendedBlock = createExtendedBlock(poolId);
-    backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getNumBytes()),
-        createInputStream(extendedBlock.getNumBytes()));
+    backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getLength()),
+        createInputStream(extendedBlock.getLength()));
     assertTrue(backupStore.hasBlock(extendedBlock));
   }
 
@@ -72,8 +73,8 @@ public class TestS3BackupStore {
     List<ExtendedBlock> blocks = new ArrayList<>();
     for (int i = 0; i < 100; i++) {
       ExtendedBlock extendedBlock = createExtendedBlock(poolId);
-      backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getNumBytes()),
-          createInputStream(extendedBlock.getNumBytes()));
+      backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getLength()),
+          createInputStream(extendedBlock.getLength()));
       blocks.add(extendedBlock);
     }
     Thread.sleep(1000);

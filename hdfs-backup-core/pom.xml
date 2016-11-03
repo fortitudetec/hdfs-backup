@@ -12,15 +12,35 @@
 	<artifactId>hdfs-backup-core</artifactId>
 	<packaging>jar</packaging>
 
+	<properties>
+		<parcel.name>HDFS_BACKUP</parcel.name>
+	</properties>
+
 	<dependencies>
+		<dependency>
+			<groupId>hdfs-backup</groupId>
+			<artifactId>hdfs-backup-spi</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>hdfs-backup</groupId>
+			<artifactId>hdfs-backup-common</artifactId>
+		</dependency>
+		<!-- Provided -->
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
 			<artifactId>hadoop-client</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- Test -->
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
 			<artifactId>hadoop-minicluster</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>hdfs-backup</groupId>
+			<artifactId>hdfs-backup-spi</artifactId>
+			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -35,6 +55,26 @@
 						<goals>
 							<goal>test-jar</goal>
 						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>distro-assembly-parcel</id>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+						<configuration>
+							<descriptors>
+								<descriptor>${parcel.assembly.file}</descriptor>
+							</descriptors>
+							<finalName>${parcel.name}-${parcel.version}</finalName>
+							<appendAssemblyId>false</appendAssemblyId>
+							<ignoreDirFormatExtensions>false</ignoreDirFormatExtensions>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>

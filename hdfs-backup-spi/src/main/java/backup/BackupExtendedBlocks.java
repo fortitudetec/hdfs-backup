@@ -3,11 +3,12 @@ package backup;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.codehaus.jackson.annotate.JsonCreator;
-import org.codehaus.jackson.annotate.JsonIgnore;
-import org.codehaus.jackson.annotate.JsonProperty;
-import org.codehaus.jackson.map.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import backup.store.ExtendedBlock;
 
 public class BackupExtendedBlocks {
 

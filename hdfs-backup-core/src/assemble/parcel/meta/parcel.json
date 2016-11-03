@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"name": "${parcel.name}",
-	"version" : "${project.version}",
+	"version" : "${parcel.version}",
 	"setActiveSymlink": true,
 	"depends": "",
 	"replaces":"${parcel.name}",
@@ -14,7 +14,7 @@
 		{
 			"name" : "${parcel.name}",
 			"version" : "${project.version}",
-			"pkg_version": "${project.version}"
+			"pkg_version": "${parcel.version}"
 		}
 	],
 	"packages" : [],

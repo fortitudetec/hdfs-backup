@@ -17,6 +17,9 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi.Factory;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsDatasetFactory;
 import org.apache.hadoop.util.ReflectionUtils;
 
+import backup.SingletonManager;
+import backup.store.ExtendedBlockConverter;
+
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
 
@@ -38,7 +41,8 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
 
   private void setupBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
     if (backupProcessor == null) {
-      backupProcessor = DataNodeBackupProcessor.newInstance(conf, datanode);
+      backupProcessor = SingletonManager.getManager(DataNodeBackupProcessor.class)
+                                        .getInstance(datanode, () -> new DataNodeBackupProcessor(conf, datanode));
     }
   }
 
@@ -78,9 +82,10 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
       try {
         Object result = method.invoke(datasetSpi, args);
-        if (method.getName().equals(FINALIZE_BLOCK)) {
+        if (method.getName()
+                  .equals(FINALIZE_BLOCK)) {
           ExtendedBlock extendedBlock = (ExtendedBlock) args[0];
-          backupProcessor.blockFinalized(extendedBlock);
+          backupProcessor.blockFinalized(ExtendedBlockConverter.fromHadoop(extendedBlock));
         }
         return result;
       } catch (InvocationTargetException e) {

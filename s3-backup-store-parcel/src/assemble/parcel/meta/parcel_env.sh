@@ -1,9 +1,0 @@
-#!/bin/bash
-
-S3_HDFS_BACKUP=$PARCELS_ROOT/$PARCEL_DIRNAME
-
-if [ -n "${HADOOP_CLASSPATH}" ]; then
-  export HADOOP_CLASSPATH="${HADOOP_CLASSPATH}:${S3_HDFS_BACKUP}/lib/*"
-else
-  export HADOOP_CLASSPATH="${S3_HDFS_BACKUP}/lib/*"
-fi

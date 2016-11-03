@@ -12,47 +12,31 @@
 	<artifactId>s3-backup-store</artifactId>
 	<packaging>jar</packaging>
 
+	<properties>
+		<parcel.name>S3_HDFS_BACKUP</parcel.name>
+	</properties>
+
 	<dependencies>
-		<dependency>
-			<groupId>hdfs-backup</groupId>
-			<artifactId>hdfs-backup-core</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.hadoop</groupId>
-			<artifactId>hadoop-client</artifactId>
-			<scope>provided</scope>
-		</dependency>
 		<dependency>
 			<groupId>com.amazonaws</groupId>
 			<artifactId>aws-java-sdk-s3</artifactId>
 		</dependency>
-
+		<!-- Provided -->
 		<dependency>
 			<groupId>hdfs-backup</groupId>
-			<artifactId>hdfs-backup-core</artifactId>
-			<type>test-jar</type>
-			<scope>test</scope>
+			<artifactId>hdfs-backup-spi</artifactId>
+			<scope>provided</scope>
 		</dependency>
+		<!-- Test -->
 		<dependency>
-			<groupId>org.apache.hadoop</groupId>
-			<artifactId>hadoop-minicluster</artifactId>
+			<groupId>hdfs-backup</groupId>
+			<artifactId>hdfs-backup-spi</artifactId>
+			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
 	<build>
 		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-shade-plugin</artifactId>
-				<executions>
-					<execution>
-						<phase>package</phase>
-						<goals>
-							<goal>shade</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
@@ -61,6 +45,26 @@
 						<goals>
 							<goal>test-jar</goal>
 						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>distro-assembly-parcel</id>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+						<configuration>
+							<descriptors>
+								<descriptor>${parcel.assembly.file}</descriptor>
+							</descriptors>
+							<finalName>${parcel.name}-${parcel.version}</finalName>
+							<appendAssemblyId>false</appendAssemblyId>
+							<ignoreDirFormatExtensions>false</ignoreDirFormatExtensions>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>

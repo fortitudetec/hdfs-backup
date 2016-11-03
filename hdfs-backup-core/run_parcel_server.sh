@@ -3,7 +3,9 @@
 PROJECT_DIR=`dirname "$0"`
 PROJECT_DIR=`cd "$PROJECT_DIR"; pwd`
 
-PARCEL_VERSION=`mvn help:evaluate -Dexpression=project.version | grep -Ev '(^\[|Download\w+:)'`
+cd "$PROJECT_DIR"
+
+PARCEL_VERSION=`mvn help:evaluate -Dexpression=parcel.version | grep -Ev '(^\[|Download\w+:)'`
 echo "PARCEL_VERSION=${PARCEL_VERSION}"
 TARGET="${PROJECT_DIR}/target"
 
@@ -29,7 +31,7 @@ fi
 
 HASH=`cat $PARCEL_SHA`
 echo "{\"lastUpdated\":${LAST_UPDATED},\"parcels\": [" > $MANIFEST
-for DISTRO in el5 el6 sles11 lucid precise trusty squeeze wheezy
+for DISTRO in el5 el6 el7 sles11 lucid precise trusty squeeze wheezy
 do
 	if [ $DISTRO != "el5" ] ; then
 		echo "," >> $MANIFEST

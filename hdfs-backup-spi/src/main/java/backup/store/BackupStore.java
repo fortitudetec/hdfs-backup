@@ -5,17 +5,21 @@ import static backup.BackupConstants.DFS_BACKUP_STORE_KEY;
 
 import java.io.InputStream;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.conf.Configured;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
-import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.commons.configuration.Configuration;
 
 public abstract class BackupStore extends Configured {
 
-  public static BackupStore create(Configuration conf) throws Exception {
-    Class<? extends BackupStore> clazz = conf.getClass(DFS_BACKUP_STORE_KEY, DFS_BACKUP_STORE_DEFAULT,
-        BackupStore.class);
+  @SuppressWarnings("unchecked")
+  public synchronized static BackupStore create(Configuration conf) throws Exception {
+    Class<? extends BackupStore> clazz;
+    try {
+      String classname = conf.getString(DFS_BACKUP_STORE_KEY, DFS_BACKUP_STORE_DEFAULT);
+      clazz = (Class<? extends BackupStore>) BackupStore.class.getClassLoader()
+                               .loadClass(classname);
+    } catch (Exception e) {
+      String classname = conf.getString(DFS_BACKUP_STORE_KEY);
+      clazz = (Class<? extends BackupStore>) BackupStoreClassHelper.tryToFindPlugin(classname);
+    }
     BackupStore backupStore = ReflectionUtils.newInstance(clazz, conf);
     backupStore.init();
     return backupStore;

@@ -1,10 +1,12 @@
 package backup;
 
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.codehaus.jackson.annotate.JsonCreator;
-import org.codehaus.jackson.annotate.JsonIgnore;
-import org.codehaus.jackson.annotate.JsonProperty;
-import org.codehaus.jackson.map.ObjectMapper;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import backup.store.ExtendedBlock;
 
 public class BackupExtendedBlock {
   @JsonIgnore
@@ -38,7 +40,7 @@ public class BackupExtendedBlock {
 
   @JsonIgnore
   public BackupExtendedBlock(ExtendedBlock extendedBlock) {
-    this(extendedBlock.getBlockPoolId(), extendedBlock.getBlockId(), extendedBlock.getNumBytes(),
+    this(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
         extendedBlock.getGenerationStamp());
   }
 

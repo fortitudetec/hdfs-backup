@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -19,7 +20,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.junit.Test;
 
@@ -28,6 +28,8 @@ import backup.datanode.DataNodeBackupServicePlugin;
 import backup.namenode.NameNodeBackupProcessor;
 import backup.namenode.NameNodeBackupServicePlugin;
 import backup.store.BackupStore;
+import backup.store.ConfigurationConverter;
+import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
@@ -93,8 +95,8 @@ public abstract class MiniClusterTestBase {
     }
   }
 
-  private File setupHdfsLocalDir() {
-    rmr(tmp);
+  private File setupHdfsLocalDir() throws IOException {
+    FileUtils.deleteDirectory(tmp);
     File hdfsDir = new File(tmp, "testHdfs-" + UUID.randomUUID());
     hdfsDir.mkdirs();
     return hdfsDir;
@@ -115,13 +117,14 @@ public abstract class MiniClusterTestBase {
       writeFile(fileSystem, path);
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-      BackupStore backupStore = BackupStore.create(conf);
+      BackupStore backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
       Set<ExtendedBlock> original = toSet(backupStore.getExtendedBlocks());
       destroyBackupStoreBlocks(backupStore);
 
       NameNode nameNode = hdfsCluster.getNameNode();
-      NameNodeBackupProcessor backupProcessor = NameNodeBackupProcessor.newInstance(conf, nameNode);
-      backupProcessor.runBlockCheck();
+      NameNodeBackupProcessor processor = SingletonManager.getManager(NameNodeBackupProcessor.class)
+                                                          .getInstance(nameNode);
+      processor.runBlockCheck();
 
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
@@ -153,13 +156,15 @@ public abstract class MiniClusterTestBase {
       writeFile(fileSystem, new Path("/testing3.txt"));
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-      BackupStore backupStore = BackupStore.create(conf);
+      BackupStore backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
       Set<ExtendedBlock> original = toSet(backupStore.getExtendedBlocks());
       destroyOneBackupStoreBlock(backupStore);
 
       NameNode nameNode = hdfsCluster.getNameNode();
-      NameNodeBackupProcessor backupProcessor = NameNodeBackupProcessor.newInstance(conf, nameNode);
-      backupProcessor.runBlockCheck();
+
+      NameNodeBackupProcessor processor = SingletonManager.getManager(NameNodeBackupProcessor.class)
+                                                          .getInstance(nameNode);
+      processor.runBlockCheck();
 
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
@@ -236,17 +241,4 @@ public abstract class MiniClusterTestBase {
       ZkUtils.rmr(zooKeeper, path);
     }
   }
-
-  public static void rmr(File file) {
-    if (!file.exists()) {
-      return;
-    }
-    if (file.isDirectory()) {
-      for (File f : file.listFiles()) {
-        rmr(f);
-      }
-    }
-    file.delete();
-  }
-
 }

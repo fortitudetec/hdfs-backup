@@ -10,14 +10,12 @@ import static backup.BackupConstants.RESTORE;
 
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.protocol.Block;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
@@ -29,10 +27,10 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.collect.MapMaker;
 
 import backup.BackupExtendedBlock;
 import backup.BaseProcessor;
+import backup.store.ExtendedBlock;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
@@ -41,8 +39,6 @@ public class NameNodeBackupProcessor extends BaseProcessor {
 
   private final static Logger LOG = LoggerFactory.getLogger(NameNodeBackupProcessor.class);
 
-  private final static Map<NameNode, NameNodeBackupProcessor> INSTANCES = new MapMaker().makeMap();
-
   private final NameNode namenode;
   private final ZooKeeperClient zooKeeper;
   private final ZooKeeperLockManager lockManager;
@@ -50,17 +46,7 @@ public class NameNodeBackupProcessor extends BaseProcessor {
   private final Set<ExtendedBlock> currentRequestedRestore;
   private final NameNodeBackupBlockCheckProcessor blockCheck;
 
-  public static synchronized NameNodeBackupProcessor newInstance(Configuration conf, NameNode namenode)
-      throws Exception {
-    NameNodeBackupProcessor processor = INSTANCES.get(namenode);
-    if (processor == null) {
-      processor = new NameNodeBackupProcessor(conf, namenode);
-      INSTANCES.put(namenode, processor);
-    }
-    return processor;
-  }
-
-  private NameNodeBackupProcessor(Configuration conf, NameNode namenode) throws Exception {
+  public NameNodeBackupProcessor(Configuration conf, NameNode namenode) throws Exception {
     this.namenode = namenode;
 
     Cache<ExtendedBlock, Boolean> cache = CacheBuilder.newBuilder()
@@ -103,11 +89,14 @@ public class NameNodeBackupProcessor extends BaseProcessor {
     FSNamesystem namesystem = namenode.getNamesystem();
     String blockPoolId = namesystem.getBlockPoolId();
     BlockManager blockManager = namesystem.getBlockManager();
-    Iterator<Block> blockIterator = blockManager.getCorruptReplicaBlockIterator();
+    Iterator<? extends Block> blockIterator = blockManager.getCorruptReplicaBlockIterator();
     boolean atLeastOneRestoreRequest = false;
     while (blockIterator.hasNext()) {
       Block block = blockIterator.next();
-      ExtendedBlock extendedBlock = new ExtendedBlock(blockPoolId, block);
+      long blockId = block.getBlockId();
+      long length = block.getNumBytes();
+      long generationStamp = block.getGenerationStamp();
+      ExtendedBlock extendedBlock = new ExtendedBlock(blockPoolId,blockId,length,generationStamp);
       if (!hasRestoreBeenRequested(extendedBlock)) {
         LOG.info("Need to restore block {}", extendedBlock);
         requestRestore(extendedBlock);

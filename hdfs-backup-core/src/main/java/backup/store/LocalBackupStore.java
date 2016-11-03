@@ -9,10 +9,8 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.commons.configuration.Configuration;
 import org.apache.commons.io.IOUtils;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
@@ -31,7 +29,7 @@ public class LocalBackupStore extends BackupStore {
   @Override
   public void init() throws Exception {
     Configuration configuration = getConf();
-    String localPath = configuration.get(DFS_BACKUP_LOCALBACKUPSTORE_PATH);
+    String localPath = configuration.getString(DFS_BACKUP_LOCALBACKUPSTORE_PATH);
     dir = new File(localPath);
     dir.mkdirs();
   }
@@ -55,7 +53,7 @@ public class LocalBackupStore extends BackupStore {
     if (metaDataFile.exists()) {
       File dataFile = getDataFile(extendedBlock);
       if (dataFile.exists()) {
-        return dataFile.length() == extendedBlock.getNumBytes();
+        return dataFile.length() == extendedBlock.getLength();
       }
     }
     return false;
@@ -128,7 +126,7 @@ public class LocalBackupStore extends BackupStore {
   }
 
   private File getPool(ExtendedBlock extendedBlock) {
-    File pool = new File(dir, extendedBlock.getBlockPoolId());
+    File pool = new File(dir, extendedBlock.getPoolId());
     pool.mkdirs();
     return pool;
   }
