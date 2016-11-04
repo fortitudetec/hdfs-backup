@@ -31,7 +31,7 @@ public class DevNullBackupStore extends BackupStore {
   }
 
   @Override
-  public ExtendedBlockEnum getExtendedBlocks() {
+  public ExtendedBlockEnum<Void> getExtendedBlocks() {
     return ExtendedBlockEnum.EMPTY;
   }
 

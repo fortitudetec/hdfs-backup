@@ -1,4 +1,4 @@
-package backup.store;
+package backup.store.local;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -15,6 +15,12 @@ import org.apache.commons.io.IOUtils;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
+
+import backup.store.BackupStore;
+import backup.store.ExtendedBlock;
+import backup.store.ExtendedBlockEnum;
+import backup.store.LengthInputStream;
+
 import com.google.common.collect.Iterators;
 
 public class LocalBackupStore extends BackupStore {
@@ -72,7 +78,7 @@ public class LocalBackupStore extends BackupStore {
   }
 
   @Override
-  public ExtendedBlockEnum getExtendedBlocks() {
+  public ExtendedBlockEnum<Void> getExtendedBlocks() {
     File[] pools = dir.listFiles((FileFilter) pathname -> pathname.isDirectory());
     Builder<Iterator<ExtendedBlock>> builder = ImmutableList.builder();
     for (File pool : pools) {

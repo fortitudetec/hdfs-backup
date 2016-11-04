@@ -20,7 +20,9 @@
 		<module>hdfs-backup-common</module>
 		<module>hdfs-backup-spi</module>
 		<module>hdfs-backup-core</module>
+		<module>hdfs-backup-test</module>
 		<module>s3-backup-store</module>
+		<module>local-backup-store</module>
 	</modules>
 
 	<repositories>

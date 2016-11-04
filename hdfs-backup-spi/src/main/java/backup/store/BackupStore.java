@@ -15,7 +15,7 @@ public abstract class BackupStore extends Configured {
     try {
       String classname = conf.getString(DFS_BACKUP_STORE_KEY, DFS_BACKUP_STORE_DEFAULT);
       clazz = (Class<? extends BackupStore>) BackupStore.class.getClassLoader()
-                               .loadClass(classname);
+                                                              .loadClass(classname);
     } catch (Exception e) {
       String classname = conf.getString(DFS_BACKUP_STORE_KEY);
       clazz = (Class<? extends BackupStore>) BackupStoreClassHelper.tryToFindPlugin(classname);
@@ -51,7 +51,7 @@ public abstract class BackupStore extends Configured {
    */
   public abstract InputStream getDataInputStream(ExtendedBlock extendedBlock) throws Exception;
 
-  public abstract ExtendedBlockEnum getExtendedBlocks() throws Exception;
+  public abstract ExtendedBlockEnum<Void> getExtendedBlocks() throws Exception;
 
   /**
    * Removes block from the backup store.

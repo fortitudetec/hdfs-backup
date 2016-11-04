@@ -1,4 +1,4 @@
-package backup;
+package backup.store.local;
 
 import java.io.File;
 import java.io.IOException;
@@ -7,7 +7,9 @@ import org.apache.commons.configuration.Configuration;
 import org.apache.commons.io.FileUtils;
 import org.junit.Test;
 
-import backup.store.LocalBackupStore;
+import backup.BackupConstants;
+import backup.IntegrationTestBase;
+import backup.store.local.LocalBackupStore;
 
 public class TestLocalBackupStoreInt extends IntegrationTestBase {
 
@@ -20,14 +22,14 @@ public class TestLocalBackupStoreInt extends IntegrationTestBase {
   }
 
   @Override
-  protected void setupBackupStore(Configuration conf) {
+  public void setupBackupStore(Configuration conf) {
     backup.mkdirs();
     conf.setProperty(BackupConstants.DFS_BACKUP_STORE_KEY, LocalBackupStore.class.getName());
     conf.setProperty(LocalBackupStore.DFS_BACKUP_LOCALBACKUPSTORE_PATH, backup.getAbsolutePath());
   }
 
   @Override
-  protected void teardownBackupStore() throws IOException {
+  public void teardownBackupStore() throws IOException {
     FileUtils.deleteDirectory(backup);
   }
 

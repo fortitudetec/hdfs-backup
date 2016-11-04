@@ -10,6 +10,7 @@ import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION;
 import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY;
 import static backup.BackupConstants.LOCKS;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -28,14 +29,15 @@ import org.slf4j.LoggerFactory;
 import backup.BaseProcessor;
 import backup.store.BackupStore;
 import backup.store.ConfigurationConverter;
-import backup.store.ExtendedBlockConverter;
 import backup.store.ExtendedBlock;
+import backup.store.ExtendedBlockConverter;
 import backup.store.LengthInputStream;
+import backup.store.WritableExtendedBlock;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
 
-public class DataNodeBackupProcessor extends BaseProcessor {
+public class DataNodeBackupProcessor extends BaseProcessor implements BackupRPC {
 
   private final static Logger LOG = LoggerFactory.getLogger(DataNodeBackupProcessor.class);
 
@@ -49,7 +51,6 @@ public class DataNodeBackupProcessor extends BaseProcessor {
   private final BlockingQueue<FutureExtendedBlockCheck> futureChecks = new LinkedBlockingQueue<>();
   private final long checkTimeDelay;
   private final int maxBlocksToCheck = 100;
-  private final DataNodeBackupRemoteRequestProcessor remoteRequestProcessor;
 
   static class FutureExtendedBlockCheck {
     final long checkTime;
@@ -87,7 +88,6 @@ public class DataNodeBackupProcessor extends BaseProcessor {
     lockManager = new ZooKeeperLockManager(zooKeeper, ZkUtils.createPath(LOCKS));
 
     backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
-    remoteRequestProcessor = new DataNodeBackupRemoteRequestProcessor(zooKeeper, this, conf);
     start();
   }
 
@@ -108,7 +108,6 @@ public class DataNodeBackupProcessor extends BaseProcessor {
   @Override
   protected void closeInternal() {
     executorService.shutdownNow();
-    IOUtils.closeQuietly(remoteRequestProcessor);
     IOUtils.closeQuietly(lockManager);
     IOUtils.closeQuietly(zooKeeper);
 
@@ -215,6 +214,16 @@ public class DataNodeBackupProcessor extends BaseProcessor {
       }
     }
     return backupOccured;
+  }
+
+  @Override
+  public void backupBlock(WritableExtendedBlock extendedBlock) throws IOException {
+    try {
+      finializedBlocks.put(extendedBlock.getExtendedBlock());
+    } catch (InterruptedException e) {
+      LOG.error("error adding new block to internal work queue {}", extendedBlock);
+      throw new IOException(e);
+    }
   }
 
 }

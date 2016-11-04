@@ -4,9 +4,9 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Iterator;
 
-public interface ExtendedBlockEnum extends Closeable {
+public interface ExtendedBlockEnum<T> extends Closeable {
 
-  public static ExtendedBlockEnum EMPTY = new ExtendedBlockEnum() {
+  public static ExtendedBlockEnum<Void> EMPTY = new ExtendedBlockEnum<Void>() {
 
     @Override
     public void close() throws IOException {
@@ -24,8 +24,8 @@ public interface ExtendedBlockEnum extends Closeable {
     }
   };
 
-  public static ExtendedBlockEnum toExtendedBlockEnum(Iterator<ExtendedBlock> it) {
-    return new ExtendedBlockEnum() {
+  public static ExtendedBlockEnum<Void> toExtendedBlockEnum(Iterator<ExtendedBlock> it) {
+    return new ExtendedBlockEnum<Void>() {
 
       private ExtendedBlock current;
 
@@ -52,6 +52,10 @@ public interface ExtendedBlockEnum extends Closeable {
   ExtendedBlock current();
 
   ExtendedBlock next() throws Exception;
+
+  default T currentValue() {
+    return null;
+  }
 
   default public void close() throws IOException {
 

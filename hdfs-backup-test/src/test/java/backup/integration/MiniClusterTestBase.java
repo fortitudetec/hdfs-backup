@@ -1,4 +1,4 @@
-package backup;
+package backup.integration;
 
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY;
 import static org.junit.Assert.assertEquals;
@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.FileUtils;
@@ -21,8 +23,12 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import backup.BackupConstants;
+import backup.IntegrationTestBase;
+import backup.SingletonManager;
 import backup.datanode.BackupFsDatasetSpiFactory;
 import backup.datanode.DataNodeBackupServicePlugin;
 import backup.namenode.NameNodeBackupProcessor;
@@ -34,13 +40,30 @@ import backup.store.ExtendedBlockEnum;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 
-public abstract class MiniClusterTestBase {
+public class MiniClusterTestBase {
 
-  protected final File tmp = new File("./target/tmp");
+  protected static final File tmp = new File("./target/tmp");
+  protected static final BlockingQueue<IntegrationTestBase> QUEUE = new LinkedBlockingQueue<>();
+  protected static IntegrationTestBase INT_TEST_BASE;
+
   protected final String zkConnection = "localhost/backup";
 
+  public static void addIntegrationTestBase(IntegrationTestBase base) {
+    QUEUE.add(base);
+  }
+
+  @BeforeClass
+  public static void setup() throws Exception {
+    INT_TEST_BASE = QUEUE.take();
+  }
+
   @Test
-  public void integrationBasicTest() throws Exception {
+  public void go() {
+    System.out.println(INT_TEST_BASE.getParcelLocation());
+  }
+
+  @Test
+  public void testIntegrationBasic() throws Exception {
     File hdfsDir = setupHdfsLocalDir();
     rmrZk(zkConnection, "/");
     Configuration conf = setupConfig(hdfsDir, zkConnection);
@@ -91,7 +114,7 @@ public abstract class MiniClusterTestBase {
         thread.interrupt();
       }
       hdfsCluster.shutdown();
-      teardownBackupStore();
+      INT_TEST_BASE.teardownBackupStore();
     }
   }
 
@@ -102,8 +125,8 @@ public abstract class MiniClusterTestBase {
     return hdfsDir;
   }
 
-  @Test
-  public void integrationBlockCheckWhenAllBackupStoreBlocksMissingTest() throws Exception {
+  // @Test
+  public void testIntegrationBlockCheckWhenAllBackupStoreBlocksMissing() throws Exception {
     File hdfsDir = setupHdfsLocalDir();
     rmrZk(zkConnection, "/");
     Configuration conf = setupConfig(hdfsDir, zkConnection);
@@ -137,12 +160,12 @@ public abstract class MiniClusterTestBase {
         thread.interrupt();
       }
       hdfsCluster.shutdown();
-      teardownBackupStore();
+      INT_TEST_BASE.teardownBackupStore();
     }
   }
 
-  @Test
-  public void integrationBlockCheckWhenSomeBackupStoreBlocksMissingTest() throws Exception {
+  // @Test
+  public void testIntegrationBlockCheckWhenSomeBackupStoreBlocksMissing() throws Exception {
     File hdfsDir = setupHdfsLocalDir();
     rmrZk(zkConnection, "/");
     Configuration conf = setupConfig(hdfsDir, zkConnection);
@@ -177,7 +200,7 @@ public abstract class MiniClusterTestBase {
         thread.interrupt();
       }
       hdfsCluster.shutdown();
-      teardownBackupStore();
+      INT_TEST_BASE.teardownBackupStore();
     }
   }
 
@@ -202,7 +225,7 @@ public abstract class MiniClusterTestBase {
     }
   }
 
-  private static Set<ExtendedBlock> toSet(ExtendedBlockEnum e) throws Exception {
+  private static Set<ExtendedBlock> toSet(ExtendedBlockEnum<?> e) throws Exception {
     Set<ExtendedBlock> set = new HashSet<>();
     ExtendedBlock block;
     while ((block = e.next()) != null) {
@@ -223,18 +246,14 @@ public abstract class MiniClusterTestBase {
 
     conf.set(BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION, zkConnection);
 
-    setupBackupStore(conf);
-
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 2);// 3
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_MINIMUM_INTERVAL_KEY, 2);// 3
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY, 6000);// 30000
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 6000);// 5*60*1000
+
+    INT_TEST_BASE.setupBackupStore(ConfigurationConverter.convert(conf));
     return conf;
   }
-
-  protected abstract void teardownBackupStore() throws Exception;
-
-  protected abstract void setupBackupStore(Configuration conf) throws Exception;
 
   public static void rmrZk(String zkConnection, String path) throws Exception {
     try (ZooKeeperClient zooKeeper = ZkUtils.newZooKeeper(zkConnection, 30000)) {

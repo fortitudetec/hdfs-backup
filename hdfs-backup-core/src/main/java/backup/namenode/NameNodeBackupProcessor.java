@@ -67,7 +67,7 @@ public class NameNodeBackupProcessor extends BaseProcessor {
     ZkUtils.mkNodesStr(zooKeeper, ZkUtils.createPath(RESTORE));
 
     lockManager = new ZooKeeperLockManager(zooKeeper, ZkUtils.createPath(LOCKS));
-    blockCheck = new NameNodeBackupBlockCheckProcessor(conf, zooKeeper, this);
+    blockCheck = new NameNodeBackupBlockCheckProcessor(conf, this);
     start();
   }
 
@@ -96,7 +96,7 @@ public class NameNodeBackupProcessor extends BaseProcessor {
       long blockId = block.getBlockId();
       long length = block.getNumBytes();
       long generationStamp = block.getGenerationStamp();
-      ExtendedBlock extendedBlock = new ExtendedBlock(blockPoolId,blockId,length,generationStamp);
+      ExtendedBlock extendedBlock = new ExtendedBlock(blockPoolId, blockId, length, generationStamp);
       if (!hasRestoreBeenRequested(extendedBlock)) {
         LOG.info("Need to restore block {}", extendedBlock);
         requestRestore(extendedBlock);

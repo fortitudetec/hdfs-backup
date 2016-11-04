@@ -16,8 +16,8 @@ import com.google.common.collect.ImmutableList.Builder;
 public class BackupStoreClassHelper {
 
   private final static Logger LOG = LoggerFactory.getLogger(BackupStoreClassHelper.class);
-
-  private static final String HDFS_BACKUP_PLUGINS = "HDFS_BACKUP_PLUGINS";
+  private static final String HDFS_BACKUP_PLUGINS_PROP = "hdfs.backup.plugins";
+  private static final String HDFS_BACKUP_PLUGINS_ENV = "HDFS_BACKUP_PLUGINS";
 
   public static void main(String[] args) throws Exception {
     tryToFindPlugin(args[0]);
@@ -26,9 +26,9 @@ public class BackupStoreClassHelper {
   private static final List<ClassLoader> CLASS_LOADERS;
 
   static {
-    String pluginDirsStr = System.getenv(HDFS_BACKUP_PLUGINS);
-    Iterable<String> pluginDirs = Splitter.on(':')
-                                          .split(pluginDirsStr);
+    List<String> pluginDirs = new ArrayList<>();
+    pluginDirs.addAll(split(System.getProperty(HDFS_BACKUP_PLUGINS_PROP)));
+    pluginDirs.addAll(split(System.getenv(HDFS_BACKUP_PLUGINS_ENV)));
     try {
       Builder<ClassLoader> builder = ImmutableList.builder();
       for (String pluginDir : pluginDirs) {
@@ -44,6 +44,15 @@ public class BackupStoreClassHelper {
       LOG.error("error trying to load plugins.", e);
       throw new RuntimeException(e);
     }
+  }
+
+  private static List<String> split(String pluginDirsStr) {
+    if (pluginDirsStr == null) {
+      return ImmutableList.of();
+    }
+    Iterable<String> pluginDirs = Splitter.on(':')
+                                          .split(pluginDirsStr);
+    return ImmutableList.copyOf(pluginDirs);
   }
 
   public static Class<?> tryToFindPlugin(String classname) throws Exception {

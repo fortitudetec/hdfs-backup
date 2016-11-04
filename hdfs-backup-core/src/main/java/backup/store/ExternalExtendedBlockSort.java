@@ -18,17 +18,19 @@ import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.SequenceFile.Reader;
 import org.apache.hadoop.io.SequenceFile.Sorter;
 import org.apache.hadoop.io.SequenceFile.Writer;
+import org.apache.hadoop.io.Writable;
 
 import com.google.common.collect.ImmutableSet;
 
-public class ExternalExtendedBlockSort implements Closeable {
+public class ExternalExtendedBlockSort<T extends Writable> implements Closeable {
   public static void main(String[] args) throws Exception {
     Configuration conf = new Configuration();
     Path dir = new Path("file:///home/apm/Development/git-projects/hdfs-backup/hdfs-backup-core/tmp");
     dir.getFileSystem(conf)
        .delete(dir, true);
     long start = System.nanoTime();
-    try (ExternalExtendedBlockSort sort = new ExternalExtendedBlockSort(conf, dir)) {
+    try (ExternalExtendedBlockSort<NullWritable> sort = new ExternalExtendedBlockSort<NullWritable>(conf, dir,
+        NullWritable.class)) {
       Random random = new Random();
       for (int bp = 0; bp < 1; bp++) {
         String bpid = UUID.randomUUID()
@@ -38,13 +40,13 @@ public class ExternalExtendedBlockSort implements Closeable {
           long genstamp = random.nextInt(20000);
           ExtendedBlock extendedBlock = new ExtendedBlock(bpid, random.nextLong(), random.nextInt(Integer.MAX_VALUE),
               genstamp);
-          sort.add(extendedBlock);
+          sort.add(extendedBlock, NullWritable.get());
         }
       }
 
       sort.finished();
       for (String blockPoolId : sort.getBlockPoolIds()) {
-        ExtendedBlockEnum blockEnum = sort.getBlockEnum(blockPoolId);
+        ExtendedBlockEnum<NullWritable> blockEnum = sort.getBlockEnum(blockPoolId);
         ExtendedBlock block;
         long l = 0;
         while ((block = blockEnum.next()) != null) {
@@ -60,20 +62,21 @@ public class ExternalExtendedBlockSort implements Closeable {
 
   private final Configuration conf;
   private final Map<String, Writer> writers = new HashMap<>();
-  private final NullWritable value;
   private final Path baseDir;
+  private final Class<? extends Writable> dataClass;
 
-  public ExternalExtendedBlockSort(Configuration conf, Path baseDir) throws IOException {
+  public ExternalExtendedBlockSort(Configuration conf, Path baseDir, Class<? extends Writable> dataClass)
+      throws IOException {
     this.conf = conf;
     this.baseDir = baseDir;
-    value = NullWritable.get();
+    this.dataClass = dataClass;
   }
 
-  public void add(ExtendedBlock extendedBlock) throws IOException {
+  public void add(ExtendedBlock extendedBlock, Writable data) throws IOException {
     Writer writer = getWriter(extendedBlock.getPoolId());
     writer.append(
         new ComparableBlock(extendedBlock.getBlockId(), extendedBlock.getLength(), extendedBlock.getGenerationStamp()),
-        value);
+        data);
   }
 
   private Writer getWriter(String blockPoolId) throws IOException {
@@ -83,7 +86,7 @@ public class ExternalExtendedBlockSort implements Closeable {
     }
     Path input = getInputFilePath(blockPoolId);
     writer = SequenceFile.createWriter(conf, Writer.file(input), Writer.keyClass(ComparableBlock.class),
-        Writer.valueClass(NullWritable.class));
+        Writer.valueClass(dataClass));
     writers.put(blockPoolId, writer);
     return writer;
   }
@@ -109,7 +112,7 @@ public class ExternalExtendedBlockSort implements Closeable {
     return ImmutableSet.copyOf(writers.keySet());
   }
 
-  public ExtendedBlockEnum getBlockEnum(String blockPoolId) throws IOException {
+  public ExtendedBlockEnum<T> getBlockEnum(String blockPoolId) throws Exception {
     Path output = getOutputFilePath(blockPoolId);
     FileSystem fileSystem = output.getFileSystem(conf);
     if (!fileSystem.exists(output)) {
@@ -118,28 +121,38 @@ public class ExternalExtendedBlockSort implements Closeable {
     return new BlockEnum(blockPoolId, new Reader(conf, Reader.file(output)));
   }
 
-  public class BlockEnum implements ExtendedBlockEnum {
+  public class BlockEnum implements ExtendedBlockEnum<T> {
     private final Reader reader;
     private final String blockPoolId;
-
     private ExtendedBlock current;
+    private T value;
 
-    public BlockEnum(String blockPoolId, Reader reader) {
+    @SuppressWarnings("unchecked")
+    public BlockEnum(String blockPoolId, Reader reader) throws Exception {
       this.blockPoolId = blockPoolId;
       this.reader = reader;
+      this.value = (T) reader.getValueClass()
+                             .newInstance();
     }
 
+    @Override
     public ExtendedBlock current() {
       return current;
     }
 
+    @Override
     public ExtendedBlock next() throws IOException {
       ComparableBlock block = new ComparableBlock();
-      if (reader.next(block)) {
+      if (reader.next(block, value)) {
         return current = block.getExtendedBlock(blockPoolId);
       } else {
         return current = null;
       }
+    }
+
+    @Override
+    public T currentValue() {
+      return value;
     }
 
     @Override
@@ -164,7 +177,7 @@ public class ExternalExtendedBlockSort implements Closeable {
       FileSystem fileSystem = output.getFileSystem(conf);
       if (!fileSystem.exists(output) && fileSystem.exists(input)) {
         LocalFileSystem local = FileSystem.getLocal(conf);
-        SequenceFile.Sorter sorter = new Sorter(local, ComparableBlock.class, NullWritable.class, conf);
+        SequenceFile.Sorter sorter = new Sorter(local, ComparableBlock.class, dataClass, conf);
         sorter.sort(input, output);
       }
     }

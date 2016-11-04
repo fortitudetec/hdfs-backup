@@ -1,13 +1,17 @@
 package backup.namenode;
 
-import static backup.BackupConstants.BACKUP_BLOCK_REQUESTS;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_KEY;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_KEY;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY;
+import static backup.BackupConstants.DFS_BACKUP_REMOTE_BACKUP_BATCH_DEFAULT;
+import static backup.BackupConstants.DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY;
 
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -24,23 +28,26 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DFSClient;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
-import org.apache.zookeeper.CreateMode;
-import org.apache.zookeeper.ZooDefs.Ids;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.ipc.RPC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import backup.BackupExtendedBlocks;
 import backup.BaseProcessor;
+import backup.datanode.BackupRPC;
 import backup.store.BackupStore;
 import backup.store.ConfigurationConverter;
-import backup.store.ExtendedBlockConverter;
 import backup.store.ExtendedBlock;
+import backup.store.ExtendedBlockConverter;
 import backup.store.ExtendedBlockEnum;
+import backup.store.ExtendedBlockWithAddress;
 import backup.store.ExternalExtendedBlockSort;
-import backup.zookeeper.ZkUtils;
-import backup.zookeeper.ZooKeeperClient;
+import backup.store.WritableExtendedBlock;
+import backup.store.WritableUtil;
 
 public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
@@ -55,17 +62,14 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private final DistributedFileSystem fileSystem;
   private final Configuration conf;
   private final BackupStore backupStore;
-  private final ZooKeeperClient zooKeeper;
+  private final int batchSize;
 
-  private int batchSize;
-
-  public NameNodeBackupBlockCheckProcessor(Configuration conf, ZooKeeperClient zooKeeper,
-      NameNodeBackupProcessor processor) throws Exception {
+  public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeBackupProcessor processor) throws Exception {
     this.conf = conf;
-    this.zooKeeper = zooKeeper;
     this.processor = processor;
     backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
     this.fileSystem = (DistributedFileSystem) FileSystem.get(conf);
+    this.batchSize = conf.getInt(DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY, DFS_BACKUP_REMOTE_BACKUP_BATCH_DEFAULT);
     this.checkInterval = conf.getLong(DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_KEY,
         DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DEFAULT);
     this.initInterval = conf.getInt(DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_KEY,
@@ -74,8 +78,8 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   }
 
   public void runBlockCheck() throws Exception {
-    ExternalExtendedBlockSort nameNodeBlocks = fetchBlocksFromNameNode();
-    ExternalExtendedBlockSort backupBlocks = fetchBlocksFromBackupStore();
+    ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode();
+    ExternalExtendedBlockSort<NullWritable> backupBlocks = fetchBlocksFromBackupStore();
     try {
       nameNodeBlocks.finished();
       backupBlocks.finished();
@@ -93,10 +97,10 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void checkBlockPool(String blockPoolId, ExternalExtendedBlockSort nameNodeBlocks,
-      ExternalExtendedBlockSort backupBlocks) throws Exception {
-    ExtendedBlockEnum nnEnum = null;
-    ExtendedBlockEnum buEnum = null;
+  private void checkBlockPool(String blockPoolId, ExternalExtendedBlockSort<Addresses> nameNodeBlocks,
+      ExternalExtendedBlockSort<NullWritable> backupBlocks) throws Exception {
+    ExtendedBlockEnum<Addresses> nnEnum = null;
+    ExtendedBlockEnum<NullWritable> buEnum = null;
     try {
       nnEnum = nameNodeBlocks.getBlockEnum(blockPoolId);
       buEnum = backupBlocks.getBlockEnum(blockPoolId);
@@ -114,16 +118,17 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void checkAllBlocks(ExtendedBlockEnum nnEnum, ExtendedBlockEnum buEnum) throws Exception {
+  private void checkAllBlocks(ExtendedBlockEnum<Addresses> nnEnum, ExtendedBlockEnum<NullWritable> buEnum)
+      throws Exception {
     nnEnum.next();
     buEnum.next();
-    List<ExtendedBlock> backupBatch = new ArrayList<>();
+    List<ExtendedBlockWithAddress> backupBatch = new ArrayList<>();
     try {
       while (true) {
         if (buEnum.current() == null && nnEnum.current() == null) {
           return;
         } else if (buEnum.current() == null) {
-          backupAll(nnEnum, nnEnum.current());
+          backupAll(nnEnum);
           return;
         } else if (nnEnum.current() == null) {
           deleteAllFromBackupStore(buEnum);
@@ -144,13 +149,13 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
         if (compare == 0) {
           // Blocks not equal but block ids present in both reports. Backup.
           backupStore.deleteBlock(bu);
-          backupBlock(backupBatch, nn);
+          backupBlock(backupBatch, nnEnum);
           nnEnum.next();
           buEnum.next();
         } else if (compare < 0) {
           // nn 123, bu 124
           // Missing backup block. Backup.
-          backupBlock(backupBatch, nn);
+          backupBlock(backupBatch, nnEnum);
           nnEnum.next();
         } else {
           // nn 125, bu 124
@@ -167,7 +172,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void deleteAllFromBackupStore(ExtendedBlockEnum buEnum) throws Exception {
+  private void deleteAllFromBackupStore(ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
     if (buEnum.current() != null) {
       backupStore.deleteBlock(buEnum.current());
     }
@@ -177,25 +182,20 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void restoreAll(ExtendedBlockEnum buEnum) throws Exception {
+  private void restoreAll(ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
     ExtendedBlock block;
     while ((block = buEnum.next()) != null) {
       processor.requestRestore(block);
     }
   }
 
-  private void backupAll(ExtendedBlockEnum nnEnum) throws Exception {
-    backupAll(nnEnum, null);
-  }
-
-  private void backupAll(ExtendedBlockEnum nnEnum, ExtendedBlock current) throws Exception {
-    List<ExtendedBlock> batch = new ArrayList<>();
-    if (current != null) {
-      batch.add(current);
+  private void backupAll(ExtendedBlockEnum<Addresses> nnEnum) throws Exception {
+    List<ExtendedBlockWithAddress> batch = new ArrayList<>();
+    if (nnEnum.current() != null) {
+      backupBlock(batch, nnEnum);
     }
-    ExtendedBlock block;
-    while ((block = nnEnum.next()) != null) {
-      backupBlock(batch, block);
+    while (nnEnum.next() != null) {
+      backupBlock(batch, nnEnum);
     }
     if (batch.size() > 0) {
       writeBackupRequests(batch);
@@ -203,35 +203,48 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void backupBlock(List<ExtendedBlock> batch, ExtendedBlock block) throws Exception {
+  private void backupBlock(List<ExtendedBlockWithAddress> batch, ExtendedBlockEnum<Addresses> nnEnum) throws Exception {
     if (batch.size() >= batchSize) {
       writeBackupRequests(batch);
       batch.clear();
     }
-    batch.add(block);
+    batch.add(new ExtendedBlockWithAddress(nnEnum.current(), nnEnum.currentValue()));
   }
 
-  private void writeBackupRequests(List<ExtendedBlock> batch) throws Exception {
-    batch.forEach(block -> LOG.info("Backup block request {}", block));
-    String path = ZkUtils.createPath(BACKUP_BLOCK_REQUESTS, "batch-");
-    byte[] data = BackupExtendedBlocks.toBytes(batch);
-    zooKeeper.create(path, data, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT_SEQUENTIAL);
+  private void writeBackupRequests(List<ExtendedBlockWithAddress> batch) throws Exception {
+    for (ExtendedBlockWithAddress extendedBlockWithAddress : batch) {
+      LOG.info("Backup block request {}", extendedBlockWithAddress.getExtendedBlock());
+      BackupRPC backup = RPC.getProxy(BackupRPC.class, RPC.getProtocolVersion(BackupRPC.class),
+          chooseOneAtRandom(extendedBlockWithAddress.getAddresses()), conf);
+      backup.backupBlock(new WritableExtendedBlock(extendedBlockWithAddress.getExtendedBlock()));
+    }
+
   }
 
-  private ExternalExtendedBlockSort fetchBlocksFromBackupStore() throws Exception {
+  private InetSocketAddress chooseOneAtRandom(Addresses address) {
+    String[] ipAddrs = address.getIpAddrs();
+    int[] ipcPorts = address.getIpcPorts();
+    int index = 0;
+    return new InetSocketAddress(ipAddrs[index], ipcPorts[index]);
+  }
+
+  private ExternalExtendedBlockSort<NullWritable> fetchBlocksFromBackupStore() throws Exception {
     Path sortDir = getLocalSort(BACKUPSTORE_SORT);
-    ExternalExtendedBlockSort backupBlocks = new ExternalExtendedBlockSort(conf, sortDir);
-    ExtendedBlockEnum extendedBlocks = backupStore.getExtendedBlocks();
+    ExternalExtendedBlockSort<NullWritable> backupBlocks = new ExternalExtendedBlockSort<NullWritable>(conf, sortDir,
+        NullWritable.class);
+    ExtendedBlockEnum<Void> extendedBlocks = backupStore.getExtendedBlocks();
     ExtendedBlock block;
+    NullWritable value = NullWritable.get();
     while ((block = extendedBlocks.next()) != null) {
-      backupBlocks.add(block);
+      backupBlocks.add(block, value);
     }
     return backupBlocks;
   }
 
-  private ExternalExtendedBlockSort fetchBlocksFromNameNode() throws Exception {
+  private ExternalExtendedBlockSort<Addresses> fetchBlocksFromNameNode() throws Exception {
     Path sortDir = getLocalSort(NAMENODE_SORT);
-    ExternalExtendedBlockSort nameNodeBlocks = new ExternalExtendedBlockSort(conf, sortDir);
+    ExternalExtendedBlockSort<Addresses> nameNodeBlocks = new ExternalExtendedBlockSort<Addresses>(conf, sortDir,
+        Addresses.class);
     RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(new Path("/"), true);
     DFSClient client = fileSystem.getClient();
     while (iterator.hasNext()) {
@@ -243,7 +256,9 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       long length = fs.getLen();
       LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
       for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
-        nameNodeBlocks.add(ExtendedBlockConverter.fromHadoop(locatedBlock.getBlock()));
+        DatanodeInfo[] locations = locatedBlock.getLocations();
+        ExtendedBlock extendedBlock = ExtendedBlockConverter.fromHadoop(locatedBlock.getBlock());
+        nameNodeBlocks.add(extendedBlock, new Addresses(locations));
       }
     }
     return nameNodeBlocks;
@@ -253,6 +268,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     Path sortDir = conf.getLocalPath(DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY, name);
     LocalFileSystem local = FileSystem.getLocal(conf);
     sortDir = sortDir.makeQualified(local.getUri(), local.getWorkingDirectory());
+    local.delete(sortDir, true);
     return sortDir;
   }
 
@@ -275,6 +291,87 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       throw t;
     } finally {
       Thread.sleep(checkInterval);
+    }
+  }
+
+  public static class Addresses implements Writable {
+
+    private String[] ipAddrs;
+    private int[] ipcPorts;
+
+    public Addresses() {
+
+    }
+
+    public Addresses(String[] ipAddrs, int[] ipcPorts) {
+      this.ipAddrs = ipAddrs;
+      this.ipcPorts = ipcPorts;
+    }
+
+    public Addresses(DatanodeInfo[] locations) {
+      this(getIpAddrs(locations), getIpcPorts(locations));
+    }
+
+    public String[] getIpAddrs() {
+      return ipAddrs;
+    }
+
+    public void setIpAddrs(String[] ipAddrs) {
+      this.ipAddrs = ipAddrs;
+    }
+
+    public int[] getIpcPorts() {
+      return ipcPorts;
+    }
+
+    public void setIpcPorts(int[] ipcPorts) {
+      this.ipcPorts = ipcPorts;
+    }
+
+    @Override
+    public void write(DataOutput out) throws IOException {
+      {
+        int len = ipAddrs.length;
+        out.writeShort(len);
+        for (int i = 0; i < len; i++) {
+          WritableUtil.writeShortString(ipAddrs[i], out);
+        }
+      }
+      {
+        int len = ipcPorts.length;
+        out.writeShort(len);
+        for (int i = 0; i < len; i++) {
+          out.writeInt(ipcPorts[i]);
+        }
+      }
+    }
+
+    @Override
+    public void readFields(DataInput in) throws IOException {
+      ipAddrs = new String[in.readShort()];
+      for (int i = 0; i < ipAddrs.length; i++) {
+        ipAddrs[i] = WritableUtil.readShortString(in);
+      }
+      ipcPorts = new int[in.readShort()];
+      for (int i = 0; i < ipcPorts.length; i++) {
+        ipcPorts[i] = in.readInt();
+      }
+    }
+
+    private static String[] getIpAddrs(DatanodeInfo[] locations) {
+      String[] result = new String[locations.length];
+      for (int i = 0; i < locations.length; i++) {
+        result[i] = locations[i].getIpAddr();
+      }
+      return result;
+    }
+
+    private static int[] getIpcPorts(DatanodeInfo[] locations) {
+      int[] result = new int[locations.length];
+      for (int i = 0; i < locations.length; i++) {
+        result[i] = locations[i].getIpcPort();
+      }
+      return result;
     }
   }
 

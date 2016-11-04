@@ -6,7 +6,6 @@ import backup.store.DevNullBackupStore;
 
 public class BackupConstants {
 
-  public static final String BACKUP_BLOCK_REQUESTS = "/backup-block-requests";
   public static final String LOCKS = "/locks";
   public static final String RESTORE = "/restore";
 
@@ -42,6 +41,9 @@ public class BackupConstants {
 
   public static final String DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY = "dfs.backup.namenode.local.dir";
   public static final String DFS_BACKUP_NAMENODE_LOCAL_DIR_DEFAULT = "file:///hdfs/sort";
+
+  public static final String DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY = "dfs.backup.remote.backup.batch";
+  public static final int DFS_BACKUP_REMOTE_BACKUP_BATCH_DEFAULT = 100;
 
   public static final String DFS_BACKUP_ZOOKEEPER_CONNECTION = "dfs.backup.zookeeper.connection";
 }

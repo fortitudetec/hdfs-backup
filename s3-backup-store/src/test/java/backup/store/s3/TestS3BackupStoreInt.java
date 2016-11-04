@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import backup.BackupConstants;
 import backup.IntegrationTestBase;
+import backup.store.s3.S3BackupStore;
 
 public class TestS3BackupStoreInt extends IntegrationTestBase {
 
@@ -21,7 +22,7 @@ public class TestS3BackupStoreInt extends IntegrationTestBase {
   }
 
   @Override
-  protected void setupBackupStore(Configuration conf) throws Exception {
+  public void setupBackupStore(Configuration conf) throws Exception {
     conf.setProperty(BackupConstants.DFS_BACKUP_STORE_KEY, S3BackupStore.class.getName());
     conf.setProperty(S3BackupStore.DFS_BACKUP_S3_BUCKET_NAME_KEY, backupBucket);
     conf.setProperty(S3BackupStore.DFS_BACKUP_S3_OBJECT_PREFIX_KEY, prefix);
@@ -32,7 +33,7 @@ public class TestS3BackupStoreInt extends IntegrationTestBase {
   }
 
   @Override
-  protected void teardownBackupStore() throws Exception {
+  public void teardownBackupStore() throws Exception {
     if (createdBucket) {
       S3BackupStore.removeBucket(backupBucket);
     } else {
