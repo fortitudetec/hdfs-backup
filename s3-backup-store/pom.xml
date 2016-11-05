@@ -21,6 +21,10 @@
 			<groupId>com.amazonaws</groupId>
 			<artifactId>aws-java-sdk-s3</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>hdfs-backup</groupId>
+			<artifactId>s3-backup-store-base</artifactId>
+		</dependency>
 		<!-- Provided -->
 		<dependency>
 			<groupId>hdfs-backup</groupId>

@@ -38,11 +38,11 @@ public class TestS3BackupStore {
   @BeforeClass
   public static void setup() throws Exception {
     conf.setProperty(BackupConstants.DFS_BACKUP_STORE_KEY, S3BackupStore.class.getName());
-    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_BUCKET_NAME_KEY, backupBucket);
-    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_OBJECT_PREFIX_KEY, prefix);
-    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, 9);
-    if (!S3BackupStore.exists(backupBucket)) {
-      S3BackupStore.createBucket(backupBucket);
+    conf.setProperty(S3BackupStoreContants.DFS_BACKUP_S3_BUCKET_NAME_KEY, backupBucket);
+    conf.setProperty(S3BackupStoreContants.DFS_BACKUP_S3_OBJECT_PREFIX_KEY, prefix);
+    conf.setProperty(S3BackupStoreContants.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, 9);
+    if (!S3BackupStoreUtil.exists(backupBucket)) {
+      S3BackupStoreUtil.createBucket(backupBucket);
       createdBucket = true;
     }
   }
@@ -50,9 +50,9 @@ public class TestS3BackupStore {
   @AfterClass
   public static void teardown() throws Exception {
     if (createdBucket) {
-      S3BackupStore.removeBucket(backupBucket);
+      S3BackupStoreUtil.removeBucket(backupBucket);
     } else {
-      S3BackupStore.removeAllObjects(backupBucket, prefix);
+      S3BackupStoreUtil.removeAllObjects(backupBucket, prefix);
     }
   }
 
@@ -78,7 +78,7 @@ public class TestS3BackupStore {
       blocks.add(extendedBlock);
     }
     Thread.sleep(1000);
-    ExtendedBlockEnum extendedBlocks = backupStore.getExtendedBlocks();
+    ExtendedBlockEnum<Void> extendedBlocks = backupStore.getExtendedBlocks();
     ExtendedBlock block;
     List<ExtendedBlock> remoteBlocks = new ArrayList<>();
     while ((block = extendedBlocks.next()) != null) {

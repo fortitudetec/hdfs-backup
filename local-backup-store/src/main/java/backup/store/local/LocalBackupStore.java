@@ -25,8 +25,6 @@ import com.google.common.collect.Iterators;
 
 public class LocalBackupStore extends BackupStore {
 
-  public static final String DFS_BACKUP_LOCALBACKUPSTORE_PATH = "dfs.backup.localbackupstore.path";
-
   private static final String META = ".meta";
   private static final String DATA = ".data";
 
@@ -35,7 +33,7 @@ public class LocalBackupStore extends BackupStore {
   @Override
   public void init() throws Exception {
     Configuration configuration = getConf();
-    String localPath = configuration.getString(DFS_BACKUP_LOCALBACKUPSTORE_PATH);
+    String localPath = configuration.getString(LocalBackupStoreConstants.DFS_BACKUP_LOCALBACKUPSTORE_PATH);
     dir = new File(localPath);
     dir.mkdirs();
   }

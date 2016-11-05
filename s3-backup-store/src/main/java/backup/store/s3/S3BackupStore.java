@@ -1,18 +1,22 @@
 package backup.store.s3;
 
+import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_BUCKET_NAME_KEY;
+import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_DEFAULT;
+import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_KEY;
+import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_ENDPOINT;
+import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_LISTING_MAXKEYS_DEFAULT;
+import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY;
+import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_OBJECT_PREFIX_KEY;
+
 import java.io.InputStream;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.configuration.Configuration;
 
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
-import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
@@ -22,7 +26,6 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
 
-import backup.BackupConstants;
 import backup.store.BackupStore;
 import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
@@ -34,14 +37,6 @@ public class S3BackupStore extends BackupStore {
   enum FileType {
     meta, data
   }
-
-  public static final String DFS_BACKUP_S3_BUCKET_NAME_KEY = "dfs.backup.s3.bucket.name";
-  public static final String DFS_BACKUP_S3_OBJECT_PREFIX_KEY = "dfs.backup.s3.object.prefix";
-  public static final String DFS_BACKUP_S3_LISTING_MAXKEYS_KEY = "dfs.backup.s3.listing.maxkeys";
-  public static final String DFS_BACKUP_S3_ENDPOINT = "dfs.backup.s3.endpoint";
-  public static final int DFS_BACKUP_S3_LISTING_MAXKEYS_DEFAULT = 10000;
-  public static final String DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_KEY = "dfs.backup.s3.credentials.provider.factory";
-  public static final String DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_DEFAULT = DefaultS3AWSCredentialsProviderFactory.class.getName();
 
   private static final String NUM_BYTES = "numBytes";
   private static final String GEN_STAMP = "genStamp";
@@ -55,39 +50,6 @@ public class S3BackupStore extends BackupStore {
   private S3AWSCredentialsProviderFactory credentialsProviderFactory;
   private AmazonS3Client s3Client;
   private int maxKeys;
-
-  public static void main(String[] args) throws Exception {
-    AmazonS3Client client = new AmazonS3Client(new DefaultAWSCredentialsProviderChain());
-    String bucketName = "test-hdfs-backup-bucket";
-    ListObjectsV2Request listObjectsV2Request = new ListObjectsV2Request().withBucketName(bucketName)
-                                                                          .withPrefix("test-hdfs-backup-debug/meta")
-                                                                          .withStartAfter(null)
-                                                                          .withMaxKeys(1000);
-
-    ListObjectsV2Result listObjectsV2 = client.listObjectsV2(listObjectsV2Request);
-    List<S3ObjectSummary> objectSummaries = listObjectsV2.getObjectSummaries();
-    for (S3ObjectSummary objectSummary : objectSummaries) {
-      System.out.println(objectSummary.getKey());
-    }
-
-    Configuration conf = new BaseConfiguration();
-    conf.setProperty(BackupConstants.DFS_BACKUP_STORE_KEY, S3BackupStore.class.getName());
-    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_BUCKET_NAME_KEY, bucketName);
-    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_OBJECT_PREFIX_KEY, "test-hdfs-backup-debug");
-    conf.setProperty(S3BackupStore.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, 5);
-
-    BackupStore backupStore = BackupStore.create(conf);
-
-    ExtendedBlockEnum extendedBlocks = backupStore.getExtendedBlocks();
-
-    int count = 0;
-    ExtendedBlock block;
-    while ((block = extendedBlocks.next()) != null) {
-      System.out.println(block);
-      count++;
-    }
-    System.out.println(count);
-  }
 
   @Override
   public void init() throws Exception {
@@ -109,8 +71,7 @@ public class S3BackupStore extends BackupStore {
   @SuppressWarnings("unchecked")
   private Class<? extends S3AWSCredentialsProviderFactory> getCredentialsProviderFactory(String classname)
       throws ClassNotFoundException {
-    return (Class<? extends S3AWSCredentialsProviderFactory>) getClass().getClassLoader()
-                                                                        .loadClass(classname);
+    return (Class<? extends S3AWSCredentialsProviderFactory>) getClass().getClassLoader().loadClass(classname);
   }
 
   protected AmazonS3Client getAmazonS3Client() throws Exception {
@@ -122,7 +83,7 @@ public class S3BackupStore extends BackupStore {
   }
 
   @Override
-  public ExtendedBlockEnum getExtendedBlocks() throws Exception {
+  public ExtendedBlockEnum<Void> getExtendedBlocks() throws Exception {
     AmazonS3Client client = getAmazonS3Client();
     try {
 
@@ -132,7 +93,7 @@ public class S3BackupStore extends BackupStore {
     }
   }
 
-  class S3ExtendedBlockEnum implements ExtendedBlockEnum {
+  class S3ExtendedBlockEnum implements ExtendedBlockEnum<Void> {
 
     private final AmazonS3Client client;
     private final String bucketName;
@@ -151,10 +112,8 @@ public class S3BackupStore extends BackupStore {
 
     private ListObjectsV2Request createObjectRequest(String bucketName, String extendedBlocksPrefix,
         String startAfter) {
-      return new ListObjectsV2Request().withBucketName(bucketName)
-                                       .withPrefix(extendedBlocksPrefix)
-                                       .withStartAfter(startAfter)
-                                       .withMaxKeys(maxKeys);
+      return new ListObjectsV2Request().withBucketName(bucketName).withPrefix(extendedBlocksPrefix)
+          .withStartAfter(startAfter).withMaxKeys(maxKeys);
     }
 
     @Override
@@ -178,8 +137,7 @@ public class S3BackupStore extends BackupStore {
     private void nextListing() {
       ListObjectsV2Request request = createObjectRequest(bucketName, extendedBlocksPrefix, startAfter);
       listObjectsV2 = client.listObjectsV2(request);
-      iterator = listObjectsV2.getObjectSummaries()
-                              .iterator();
+      iterator = listObjectsV2.getObjectSummaries().iterator();
     }
 
     @Override
@@ -315,64 +273,6 @@ public class S3BackupStore extends BackupStore {
     } else {
       return JOINER.join(objectPrefix, FileType.meta.name());
     }
-  }
-
-  /**
-   * For testing.
-   */
-  static void removeBucket(String bucketName) throws Exception {
-    removeAllObjects(bucketName);
-    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
-    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
-    client.deleteBucket(bucketName);
-  }
-
-  /**
-   * For testing.
-   */
-  static void removeAllObjects(String bucketName) throws Exception {
-    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
-    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
-    ObjectListing listObjects = client.listObjects(bucketName);
-    List<S3ObjectSummary> objectSummaries = listObjects.getObjectSummaries();
-    for (S3ObjectSummary objectSummary : objectSummaries) {
-      String key = objectSummary.getKey();
-      client.deleteObject(bucketName, key);
-    }
-  }
-
-  /**
-   * For testing.
-   */
-  static void removeAllObjects(String bucketName, String prefix) throws Exception {
-    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
-    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
-    ObjectListing listObjects = client.listObjects(bucketName);
-    List<S3ObjectSummary> objectSummaries = listObjects.getObjectSummaries();
-    for (S3ObjectSummary objectSummary : objectSummaries) {
-      String key = objectSummary.getKey();
-      if (key.startsWith(prefix)) {
-        client.deleteObject(bucketName, key);
-      }
-    }
-  }
-
-  /**
-   * For testing.
-   */
-  static boolean exists(String bucketName) throws Exception {
-    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
-    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
-    return client.doesBucketExist(bucketName);
-  }
-
-  /**
-   * For testing.
-   */
-  static void createBucket(String bucketName) throws Exception {
-    DefaultS3AWSCredentialsProviderFactory providerFactory = new DefaultS3AWSCredentialsProviderFactory();
-    AmazonS3Client client = new AmazonS3Client(providerFactory.getCredentials());
-    client.createBucket(bucketName);
   }
 
 }

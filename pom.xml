@@ -21,8 +21,12 @@
 		<module>hdfs-backup-spi</module>
 		<module>hdfs-backup-core</module>
 		<module>hdfs-backup-test</module>
-		<module>s3-backup-store</module>
 		<module>local-backup-store</module>
+    <module>local-backup-store-base</module>
+		<module>local-backup-store-test</module>
+		<module>s3-backup-store</module>
+		<module>s3-backup-store-base</module>
+		<module>s3-backup-store-test</module>
 	</modules>
 
 	<repositories>
@@ -34,6 +38,11 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<dependency>
+			    <groupId>commons-io</groupId>
+			    <artifactId>commons-io</artifactId>
+			    <version>2.5</version>
+			</dependency>
 			<dependency>
 				<groupId>org.apache.commons</groupId>
 				<artifactId>commons-configuration2</artifactId>
@@ -63,6 +72,12 @@
 			</dependency>
 			<dependency>
 				<groupId>hdfs-backup</groupId>
+				<artifactId>hdfs-backup-test</artifactId>
+				<version>${project.version}</version>
+				<type>test-jar</type>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
 				<artifactId>hdfs-backup-spi</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -72,6 +87,23 @@
 				<version>${project.version}</version>
 				<type>test-jar</type>
 			</dependency>
+
+			<dependency>
+				<groupId>hdfs-backup</groupId>
+				<artifactId>local-backup-store-base</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
+				<artifactId>local-backup-store</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
+				<artifactId>local-backup-store-test</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+
 			<dependency>
 				<groupId>hdfs-backup</groupId>
 				<artifactId>s3-backup-store</artifactId>
@@ -82,6 +114,16 @@
 				<artifactId>s3-backup-store</artifactId>
 				<version>${project.version}</version>
 				<type>test-jar</type>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
+				<artifactId>s3-backup-store-base</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
+				<artifactId>s3-backup-store-test</artifactId>
+				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.apache.hadoop</groupId>

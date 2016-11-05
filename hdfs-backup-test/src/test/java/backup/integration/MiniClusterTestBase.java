@@ -2,17 +2,25 @@ package backup.integration;
 
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.commons.compress.archivers.ArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -23,43 +31,79 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
-import org.junit.BeforeClass;
+import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
+import org.eclipse.aether.DefaultRepositorySystemSession;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.artifact.DefaultArtifact;
+import org.eclipse.aether.connector.basic.BasicRepositoryConnectorFactory;
+import org.eclipse.aether.impl.DefaultServiceLocator;
+import org.eclipse.aether.repository.LocalRepository;
+import org.eclipse.aether.resolution.ArtifactRequest;
+import org.eclipse.aether.resolution.ArtifactResolutionException;
+import org.eclipse.aether.resolution.ArtifactResult;
+import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
+import org.eclipse.aether.spi.connector.transport.TransporterFactory;
+import org.eclipse.aether.transport.file.FileTransporterFactory;
+import org.eclipse.aether.transport.http.HttpTransporterFactory;
+import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import backup.BackupConstants;
-import backup.IntegrationTestBase;
 import backup.SingletonManager;
 import backup.datanode.BackupFsDatasetSpiFactory;
 import backup.datanode.DataNodeBackupServicePlugin;
 import backup.namenode.NameNodeBackupProcessor;
 import backup.namenode.NameNodeBackupServicePlugin;
 import backup.store.BackupStore;
+import backup.store.BackupStoreClassHelper;
 import backup.store.ConfigurationConverter;
 import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 
-public class MiniClusterTestBase {
+public abstract class MiniClusterTestBase {
 
-  protected static final File tmp = new File("./target/tmp");
-  protected static final BlockingQueue<IntegrationTestBase> QUEUE = new LinkedBlockingQueue<>();
-  protected static IntegrationTestBase INT_TEST_BASE;
+  private static final String USER_HOME = "user.home";
 
+  private final static Logger LOG = LoggerFactory.getLogger(MiniClusterTestBase.class);
+
+  protected static final String LIB = "lib";
+  protected static final String TESTS = "tests";
+  protected static final String TAR_GZ = "tar.gz";
+  protected static final String JAR = "jar";
+  protected final File tmpHdfs = new File("./target/tmp_hdfs");
+  protected final File tmpParcel = new File("./target/tmp_parcel");
   protected final String zkConnection = "localhost/backup";
+  protected boolean classLoaderLoaded;
 
-  public static void addIntegrationTestBase(IntegrationTestBase base) {
-    QUEUE.add(base);
+  protected abstract void teardownBackupStore() throws Exception;
+
+  protected abstract void setupBackupStore(org.apache.commons.configuration.Configuration conf) throws Exception;
+
+  protected abstract String testArtifactId();
+
+  protected abstract String testGroupName();
+
+  protected abstract String testVersion();
+
+  @Before
+  public void setup() throws Exception {
+    setupClassLoader();
   }
 
-  @BeforeClass
-  public static void setup() throws Exception {
-    INT_TEST_BASE = QUEUE.take();
-  }
-
-  @Test
-  public void go() {
-    System.out.println(INT_TEST_BASE.getParcelLocation());
+  protected void setupClassLoader() throws Exception {
+    if (!classLoaderLoaded) {
+      String manveRepo = System.getProperty(USER_HOME) + "/.m2/repository";
+      LocalRepository localRepo = new LocalRepository(manveRepo);
+      File extractTar = extractTar(tmpParcel, localRepo);
+      File libDir = findLibDir(extractTar);
+      BackupStoreClassHelper.loadClassLoaders(libDir.getAbsolutePath());
+      classLoaderLoaded = true;
+    }
   }
 
   @Test
@@ -75,6 +119,7 @@ public class MiniClusterTestBase {
       Path path = new Path("/testing.txt");
       writeFile(fileSystem, path);
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+      AtomicBoolean success = new AtomicBoolean(false);
       thread = new Thread(new Runnable() {
         @Override
         public void run() {
@@ -90,14 +135,13 @@ public class MiniClusterTestBase {
                   hdfsCluster.stopDataNode(0);
                   beginTest = false;
                 } else {
-                  System.out.println("YAY it restored the missing block!!!! " + output.toByteArray().length);
+                  LOG.info("Missing block restored.");
+                  success.set(true);
                   return;
                 }
               }
             } catch (IOException e) {
-              for (int i = 0; i < 10; i++) {
-                System.err.println("Can not read file=======");
-              }
+              LOG.error(e.getMessage());
             }
             try {
               Thread.sleep(1000);
@@ -109,23 +153,26 @@ public class MiniClusterTestBase {
       });
       thread.start();
       thread.join(TimeUnit.MINUTES.toMillis(2));
+      if (!success.get()) {
+        fail();
+      }
     } finally {
       if (thread != null) {
         thread.interrupt();
       }
       hdfsCluster.shutdown();
-      INT_TEST_BASE.teardownBackupStore();
+      teardownBackupStore();
     }
   }
 
   private File setupHdfsLocalDir() throws IOException {
-    FileUtils.deleteDirectory(tmp);
-    File hdfsDir = new File(tmp, "testHdfs-" + UUID.randomUUID());
+    FileUtils.deleteDirectory(tmpHdfs);
+    File hdfsDir = new File(tmpHdfs, "testHdfs-" + UUID.randomUUID());
     hdfsDir.mkdirs();
     return hdfsDir;
   }
 
-  // @Test
+  @Test
   public void testIntegrationBlockCheckWhenAllBackupStoreBlocksMissing() throws Exception {
     File hdfsDir = setupHdfsLocalDir();
     rmrZk(zkConnection, "/");
@@ -135,7 +182,6 @@ public class MiniClusterTestBase {
     Thread thread = null;
     try {
       DistributedFileSystem fileSystem = hdfsCluster.getFileSystem();
-      System.out.println(fileSystem.listStatus(new Path("/")));
       Path path = new Path("/testing.txt");
       writeFile(fileSystem, path);
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
@@ -146,7 +192,7 @@ public class MiniClusterTestBase {
 
       NameNode nameNode = hdfsCluster.getNameNode();
       NameNodeBackupProcessor processor = SingletonManager.getManager(NameNodeBackupProcessor.class)
-                                                          .getInstance(nameNode);
+          .getInstance(nameNode);
       processor.runBlockCheck();
 
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
@@ -160,11 +206,11 @@ public class MiniClusterTestBase {
         thread.interrupt();
       }
       hdfsCluster.shutdown();
-      INT_TEST_BASE.teardownBackupStore();
+      teardownBackupStore();
     }
   }
 
-  // @Test
+  @Test
   public void testIntegrationBlockCheckWhenSomeBackupStoreBlocksMissing() throws Exception {
     File hdfsDir = setupHdfsLocalDir();
     rmrZk(zkConnection, "/");
@@ -186,7 +232,7 @@ public class MiniClusterTestBase {
       NameNode nameNode = hdfsCluster.getNameNode();
 
       NameNodeBackupProcessor processor = SingletonManager.getManager(NameNodeBackupProcessor.class)
-                                                          .getInstance(nameNode);
+          .getInstance(nameNode);
       processor.runBlockCheck();
 
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
@@ -200,7 +246,7 @@ public class MiniClusterTestBase {
         thread.interrupt();
       }
       hdfsCluster.shutdown();
-      INT_TEST_BASE.teardownBackupStore();
+      teardownBackupStore();
     }
   }
 
@@ -236,7 +282,7 @@ public class MiniClusterTestBase {
 
   private Configuration setupConfig(File hdfsDir, String zkConnection) throws Exception {
     Configuration conf = new Configuration();
-    File backup = new File(tmp, "backup");
+    File backup = new File(tmpHdfs, "backup");
     backup.mkdirs();
     conf.set(DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY, backup.getAbsolutePath());
     conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, hdfsDir.getAbsolutePath());
@@ -251,7 +297,14 @@ public class MiniClusterTestBase {
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY, 6000);// 30000
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 6000);// 5*60*1000
 
-    INT_TEST_BASE.setupBackupStore(ConfigurationConverter.convert(conf));
+    org.apache.commons.configuration.Configuration configuration = ConfigurationConverter.convert(conf);
+    setupBackupStore(configuration);
+    Iterator<String> keys = configuration.getKeys();
+    while (keys.hasNext()) {
+      String key = keys.next();
+      conf.set(key, configuration.getString(key));
+    }
+
     return conf;
   }
 
@@ -260,4 +313,65 @@ public class MiniClusterTestBase {
       ZkUtils.rmr(zooKeeper, path);
     }
   }
+
+  public File extractTar(File output, LocalRepository localRepo) throws Exception {
+    DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
+    locator.addService(RepositoryConnectorFactory.class, BasicRepositoryConnectorFactory.class);
+    locator.addService(TransporterFactory.class, FileTransporterFactory.class);
+    locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
+    RepositorySystem system = locator.getService(RepositorySystem.class);
+    DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
+    session.setLocalRepositoryManager(system.newLocalRepositoryManager(session, localRepo));
+
+    Artifact tarArtifact = getArtifact(system, session,
+        new DefaultArtifact(testGroupName(), testArtifactId(), TAR_GZ, testVersion()));
+    File parcelLocation = tarArtifact.getFile();
+    extract(output, parcelLocation);
+    return output;
+  }
+
+  private static Artifact getArtifact(RepositorySystem system, DefaultRepositorySystemSession session,
+      DefaultArtifact rartifact) throws ArtifactResolutionException {
+    ArtifactRequest artifactRequest = new ArtifactRequest();
+    artifactRequest.setArtifact(rartifact);
+    ArtifactResult artifactResult = system.resolveArtifact(session, artifactRequest);
+    Artifact artifact = artifactResult.getArtifact();
+    return artifact;
+  }
+
+  private static File extract(File output, File parcelLocation) throws Exception {
+    try (TarArchiveInputStream tarInput = new TarArchiveInputStream(
+        new GzipCompressorInputStream(new FileInputStream(parcelLocation)))) {
+      ArchiveEntry entry;
+      while ((entry = (ArchiveEntry) tarInput.getNextEntry()) != null) {
+        LOG.info("Extracting: {}", entry.getName());
+        File f = new File(output, entry.getName());
+        if (entry.isDirectory()) {
+          f.mkdirs();
+        } else {
+          f.getParentFile().mkdirs();
+          try (OutputStream out = new BufferedOutputStream(new FileOutputStream(f))) {
+            IOUtils.copy(tarInput, out);
+          }
+        }
+      }
+    }
+    return output;
+  }
+
+  private static File findLibDir(File file) {
+    if (file.isDirectory()) {
+      if (file.getName().equals(LIB)) {
+        return file;
+      }
+      for (File f : file.listFiles()) {
+        File libDir = findLibDir(f);
+        if (libDir != null) {
+          return libDir;
+        }
+      }
+    }
+    return null;
+  }
+
 }

@@ -26,15 +26,13 @@ public class ExternalExtendedBlockSort<T extends Writable> implements Closeable 
   public static void main(String[] args) throws Exception {
     Configuration conf = new Configuration();
     Path dir = new Path("file:///home/apm/Development/git-projects/hdfs-backup/hdfs-backup-core/tmp");
-    dir.getFileSystem(conf)
-       .delete(dir, true);
+    dir.getFileSystem(conf).delete(dir, true);
     long start = System.nanoTime();
     try (ExternalExtendedBlockSort<NullWritable> sort = new ExternalExtendedBlockSort<NullWritable>(conf, dir,
         NullWritable.class)) {
       Random random = new Random();
       for (int bp = 0; bp < 1; bp++) {
-        String bpid = UUID.randomUUID()
-                          .toString();
+        String bpid = UUID.randomUUID().toString();
         for (int i = 0; i < 10000000; i++) {
           // for (int i = 0; i < 10; i++) {
           long genstamp = random.nextInt(20000);
@@ -127,12 +125,22 @@ public class ExternalExtendedBlockSort<T extends Writable> implements Closeable 
     private ExtendedBlock current;
     private T value;
 
-    @SuppressWarnings("unchecked")
     public BlockEnum(String blockPoolId, Reader reader) throws Exception {
       this.blockPoolId = blockPoolId;
       this.reader = reader;
-      this.value = (T) reader.getValueClass()
-                             .newInstance();
+      this.value = getValueInstance(reader);
+    }
+
+    @SuppressWarnings("unchecked")
+    private T getValueInstance(Reader reader) throws InstantiationException, IllegalAccessException {
+      Class<?> valueClass = reader.getValueClass();
+      T val;
+      if (valueClass == NullWritable.class) {
+        val = (T) NullWritable.get();
+      } else {
+        val = (T) reader.getValueClass().newInstance();
+      }
+      return val;
     }
 
     @Override

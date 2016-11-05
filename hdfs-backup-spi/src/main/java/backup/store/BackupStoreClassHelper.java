@@ -4,14 +4,17 @@ import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableList.Builder;
+import com.google.common.collect.MapMaker;
 
 public class BackupStoreClassHelper {
 
@@ -23,44 +26,59 @@ public class BackupStoreClassHelper {
     tryToFindPlugin(args[0]);
   }
 
-  private static final List<ClassLoader> CLASS_LOADERS;
+  private static final Map<File, ClassLoader> CLASS_LOADERS = new MapMaker().makeMap();
 
   static {
     List<String> pluginDirs = new ArrayList<>();
-    pluginDirs.addAll(split(System.getProperty(HDFS_BACKUP_PLUGINS_PROP)));
-    pluginDirs.addAll(split(System.getenv(HDFS_BACKUP_PLUGINS_ENV)));
+    pluginDirs.addAll(split(',', System.getProperty(HDFS_BACKUP_PLUGINS_PROP)));
+    pluginDirs.addAll(split(':', System.getenv(HDFS_BACKUP_PLUGINS_ENV)));
+    loadClassLoaders(pluginDirs);
+  }
+
+  public static void loadClassLoaders(String... pluginDir) {
+    if (pluginDir == null) {
+      return;
+    }
+    loadClassLoaders(Arrays.asList(pluginDir));
+  }
+
+  public static void loadClassLoaders(List<String> pluginDirs) {
     try {
-      Builder<ClassLoader> builder = ImmutableList.builder();
       for (String pluginDir : pluginDirs) {
-        File plugin = new File(pluginDir);
+        File plugin = new File(pluginDir).getAbsoluteFile();
+        if (CLASS_LOADERS.containsKey(plugin)) {
+          LOG.info("Class Loader for path {} already loaded.", plugin);
+          continue;
+        }
         if (plugin.exists()) {
-          builder.add(newClassLoader(plugin));
+          CLASS_LOADERS.put(plugin, newClassLoader(plugin));
         } else {
           LOG.error("pluging dir {} missing", plugin);
         }
       }
-      CLASS_LOADERS = builder.build();
     } catch (Exception e) {
       LOG.error("error trying to load plugins.", e);
       throw new RuntimeException(e);
     }
   }
 
-  private static List<String> split(String pluginDirsStr) {
+  private static List<String> split(char on, String pluginDirsStr) {
     if (pluginDirsStr == null) {
       return ImmutableList.of();
     }
-    Iterable<String> pluginDirs = Splitter.on(':')
-                                          .split(pluginDirsStr);
+    Iterable<String> pluginDirs = Splitter.on(on).split(pluginDirsStr);
     return ImmutableList.copyOf(pluginDirs);
   }
 
   public static Class<?> tryToFindPlugin(String classname) throws Exception {
-    for (ClassLoader classLoader : CLASS_LOADERS) {
+    for (Entry<File, ClassLoader> entry : CLASS_LOADERS.entrySet()) {
+      File file = entry.getKey();
+      ClassLoader classLoader = entry.getValue();
       try {
         return classLoader.loadClass(classname);
       } catch (ClassNotFoundException e) {
-        LOG.info("Class {} not found in {}", classname, classLoader);
+        e.printStackTrace();
+        LOG.info("Class {} not found in {} {}", classname, file, classLoader);
       }
     }
     throw new ClassNotFoundException(classname);
@@ -70,8 +88,7 @@ public class BackupStoreClassHelper {
     LOG.info("loading new plugin {}", pluginDir);
     List<URL> urls = new ArrayList<>();
     for (File file : pluginDir.listFiles()) {
-      urls.add(file.toURI()
-                   .toURL());
+      urls.add(file.toURI().toURL());
     }
     return new BackupStoreClassLoader(urls.toArray(new URL[] {}));
   }

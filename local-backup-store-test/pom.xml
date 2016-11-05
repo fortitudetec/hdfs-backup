@@ -9,29 +9,39 @@
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 	<groupId>hdfs-backup</groupId>
-	<artifactId>local-backup-store</artifactId>
+	<artifactId>local-backup-store-test</artifactId>
 	<packaging>jar</packaging>
-
-	<properties>
-		<parcel.name>LOCAL_HDFS_BACKUP</parcel.name>
-	</properties>
 
 	<dependencies>
 		<dependency>
-			<groupId>commons-io</groupId>
-			<artifactId>commons-io</artifactId>
+			<groupId>hdfs-backup</groupId>
+			<artifactId>hdfs-backup-spi</artifactId>
+		</dependency>
+		<!-- Tests -->
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-client</artifactId>
+			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>hdfs-backup</groupId>
 			<artifactId>local-backup-store-base</artifactId>
+			<scope>test</scope>
 		</dependency>
-		<!-- Provided -->
+		<dependency>
+			<groupId>hdfs-backup</groupId>
+			<artifactId>hdfs-backup-test</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>hdfs-backup</groupId>
 			<artifactId>hdfs-backup-spi</artifactId>
-			<scope>provided</scope>
+			<type>test-jar</type>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
 	<build>
 		<plugins>
 			<plugin>
@@ -42,26 +52,6 @@
 						<goals>
 							<goal>test-jar</goal>
 						</goals>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-				<artifactId>maven-assembly-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>distro-assembly-parcel</id>
-						<phase>package</phase>
-						<goals>
-							<goal>single</goal>
-						</goals>
-						<configuration>
-							<descriptors>
-								<descriptor>${parcel.assembly.file}</descriptor>
-							</descriptors>
-							<finalName>${parcel.name}-${parcel.version}</finalName>
-							<appendAssemblyId>false</appendAssemblyId>
-							<ignoreDirFormatExtensions>false</ignoreDirFormatExtensions>
-						</configuration>
 					</execution>
 				</executions>
 			</plugin>
