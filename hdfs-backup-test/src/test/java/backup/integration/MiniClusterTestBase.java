@@ -55,7 +55,7 @@ import backup.BackupConstants;
 import backup.SingletonManager;
 import backup.datanode.BackupFsDatasetSpiFactory;
 import backup.datanode.DataNodeBackupServicePlugin;
-import backup.namenode.NameNodeBackupProcessor;
+import backup.namenode.NameNodeRestoreProcessor;
 import backup.namenode.NameNodeBackupServicePlugin;
 import backup.store.BackupStore;
 import backup.store.BackupStoreClassHelper;
@@ -191,7 +191,7 @@ public abstract class MiniClusterTestBase {
       destroyBackupStoreBlocks(backupStore);
 
       NameNode nameNode = hdfsCluster.getNameNode();
-      NameNodeBackupProcessor processor = SingletonManager.getManager(NameNodeBackupProcessor.class)
+      NameNodeRestoreProcessor processor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
           .getInstance(nameNode);
       processor.runBlockCheck();
 
@@ -231,7 +231,7 @@ public abstract class MiniClusterTestBase {
 
       NameNode nameNode = hdfsCluster.getNameNode();
 
-      NameNodeBackupProcessor processor = SingletonManager.getManager(NameNodeBackupProcessor.class)
+      NameNodeRestoreProcessor processor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
           .getInstance(nameNode);
       processor.runBlockCheck();
 

@@ -11,15 +11,15 @@ import backup.SingletonManager;
 
 public class NameNodeBackupServicePlugin extends Configured implements ServicePlugin {
 
-  private NameNodeBackupProcessor backupProcessor;
+  private NameNodeRestoreProcessor backupProcessor;
 
   @Override
   public void start(Object service) {
     NameNode namenode = (NameNode) service;
     // This object is created here so that it's lifecycle follows the namenode
     try {
-      backupProcessor = SingletonManager.getManager(NameNodeBackupProcessor.class)
-                                        .getInstance(namenode, () -> new NameNodeBackupProcessor(getConf(), namenode));
+      backupProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
+                                        .getInstance(namenode, () -> new NameNodeRestoreProcessor(getConf(), namenode));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

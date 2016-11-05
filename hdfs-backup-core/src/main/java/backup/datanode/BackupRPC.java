@@ -10,5 +10,7 @@ import backup.store.WritableExtendedBlock;
 public interface BackupRPC {
 
   void backupBlock(WritableExtendedBlock extendedBlock) throws IOException;
+  
+  void restoreBlock(WritableExtendedBlock extendedBlock) throws IOException;
 
 }

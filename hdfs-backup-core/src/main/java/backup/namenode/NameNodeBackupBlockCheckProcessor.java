@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import backup.BaseProcessor;
 import backup.datanode.BackupRPC;
 import backup.store.BackupStore;
+import backup.store.BackupUtil;
 import backup.store.ConfigurationConverter;
 import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockConverter;
@@ -56,7 +57,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private static final String NAMENODE_SORT = "namenode-sort/";
   private static final String BACKUPSTORE_SORT = "backupstore-sort/";
 
-  private final NameNodeBackupProcessor processor;
+  private final NameNodeRestoreProcessor processor;
   private final long checkInterval;
   private final int initInterval;
   private final DistributedFileSystem fileSystem;
@@ -64,7 +65,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private final BackupStore backupStore;
   private final int batchSize;
 
-  public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeBackupProcessor processor) throws Exception {
+  public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor) throws Exception {
     this.conf = conf;
     this.processor = processor;
     backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
@@ -224,7 +225,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private InetSocketAddress chooseOneAtRandom(Addresses address) {
     String[] ipAddrs = address.getIpAddrs();
     int[] ipcPorts = address.getIpcPorts();
-    int index = 0;
+    int index = BackupUtil.nextInt(ipAddrs.length);
     return new InetSocketAddress(ipAddrs[index], ipcPorts[index]);
   }
 
@@ -249,9 +250,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     DFSClient client = fileSystem.getClient();
     while (iterator.hasNext()) {
       FileStatus fs = iterator.next();
-      String src = fs.getPath()
-                     .toUri()
-                     .getPath();
+      String src = fs.getPath().toUri().getPath();
       long start = 0;
       long length = fs.getLen();
       LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
@@ -309,7 +308,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
 
     public Addresses(DatanodeInfo[] locations) {
-      this(getIpAddrs(locations), getIpcPorts(locations));
+      this(BackupUtil.getIpAddrs(locations), BackupUtil.getIpcPorts(locations));
     }
 
     public String[] getIpAddrs() {
@@ -358,21 +357,6 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       }
     }
 
-    private static String[] getIpAddrs(DatanodeInfo[] locations) {
-      String[] result = new String[locations.length];
-      for (int i = 0; i < locations.length; i++) {
-        result[i] = locations[i].getIpAddr();
-      }
-      return result;
-    }
-
-    private static int[] getIpcPorts(DatanodeInfo[] locations) {
-      int[] result = new int[locations.length];
-      for (int i = 0; i < locations.length; i++) {
-        result[i] = locations[i].getIpcPort();
-      }
-      return result;
-    }
   }
 
 }

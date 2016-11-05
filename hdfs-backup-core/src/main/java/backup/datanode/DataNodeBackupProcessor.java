@@ -37,7 +37,7 @@ import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
 
-public class DataNodeBackupProcessor extends BaseProcessor implements BackupRPC {
+public class DataNodeBackupProcessor extends BaseProcessor {
 
   private final static Logger LOG = LoggerFactory.getLogger(DataNodeBackupProcessor.class);
 
@@ -166,8 +166,8 @@ public class DataNodeBackupProcessor extends BaseProcessor implements BackupRPC 
         BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(heb);
         long numBytes = blockLocalPathInfo.getNumBytes();
         try (LengthInputStream data = new LengthInputStream(fsDataset.getBlockInputStream(heb, 0), numBytes)) {
-          org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta = fsDataset.getMetaDataInputStream(
-              heb);
+          org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta = fsDataset
+              .getMetaDataInputStream(heb);
           try (LengthInputStream meta = new LengthInputStream(tmeta, tmeta.getLength())) {
             backupStore.backupBlock(extendedBlock, data, meta);
           }
@@ -216,7 +216,6 @@ public class DataNodeBackupProcessor extends BaseProcessor implements BackupRPC 
     return backupOccured;
   }
 
-  @Override
   public void backupBlock(WritableExtendedBlock extendedBlock) throws IOException {
     try {
       finializedBlocks.put(extendedBlock.getExtendedBlock());
