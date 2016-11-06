@@ -25,7 +25,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
 import backup.BaseProcessor;
-import backup.datanode.BackupRPC;
+import backup.datanode.DataNodeBackupRPC;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
 import backup.store.WritableExtendedBlock;
@@ -87,7 +87,7 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
 
   public synchronized void requestRestore(ExtendedBlock extendedBlock) throws Exception {
     Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager().getDatanodes();
-    BackupRPC backup = RPC.getProxy(BackupRPC.class, RPC.getProtocolVersion(BackupRPC.class),
+    DataNodeBackupRPC backup = RPC.getProxy(DataNodeBackupRPC.class, RPC.getProtocolVersion(DataNodeBackupRPC.class),
         getDataNodeAddress(datanodes), conf);
     backup.restoreBlock(new WritableExtendedBlock(extendedBlock));
     currentRequestedRestore.add(extendedBlock);

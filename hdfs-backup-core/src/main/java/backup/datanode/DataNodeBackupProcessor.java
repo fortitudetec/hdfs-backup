@@ -216,7 +216,7 @@ public class DataNodeBackupProcessor extends BaseProcessor {
     return backupOccured;
   }
 
-  public void backupBlock(WritableExtendedBlock extendedBlock) throws IOException {
+  public void addToBackupQueue(WritableExtendedBlock extendedBlock) throws IOException {
     try {
       finializedBlocks.put(extendedBlock.getExtendedBlock());
     } catch (InterruptedException e) {

@@ -18,8 +18,8 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     NameNode namenode = (NameNode) service;
     // This object is created here so that it's lifecycle follows the namenode
     try {
-      backupProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
-                                        .getInstance(namenode, () -> new NameNodeRestoreProcessor(getConf(), namenode));
+      backupProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class).getInstance(namenode,
+          () -> new NameNodeRestoreProcessor(getConf(), namenode));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

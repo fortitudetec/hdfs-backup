@@ -38,7 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import backup.BaseProcessor;
-import backup.datanode.BackupRPC;
+import backup.datanode.DataNodeBackupRPC;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
 import backup.store.ConfigurationConverter;
@@ -215,7 +215,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private void writeBackupRequests(List<ExtendedBlockWithAddress> batch) throws Exception {
     for (ExtendedBlockWithAddress extendedBlockWithAddress : batch) {
       LOG.info("Backup block request {}", extendedBlockWithAddress.getExtendedBlock());
-      BackupRPC backup = RPC.getProxy(BackupRPC.class, RPC.getProtocolVersion(BackupRPC.class),
+      DataNodeBackupRPC backup = RPC.getProxy(DataNodeBackupRPC.class, RPC.getProtocolVersion(DataNodeBackupRPC.class),
           chooseOneAtRandom(extendedBlockWithAddress.getAddresses()), conf);
       backup.backupBlock(new WritableExtendedBlock(extendedBlockWithAddress.getExtendedBlock()));
     }

@@ -24,8 +24,8 @@ public class DataNodeBackupServicePlugin extends Configured implements ServicePl
           () -> new DataNodeBackupProcessor(getConf(), datanode));
       restoreProcessor = SingletonManager.getManager(DataNodeRestoreProcessor.class).getInstance(datanode,
           () -> new DataNodeRestoreProcessor(getConf(), datanode));
-      BackupRPCImpl backupRPCImpl = new BackupRPCImpl(backupProcessor, restoreProcessor);
-      datanode.ipcServer.addProtocol(RPC.RpcKind.RPC_WRITABLE, BackupRPC.class, backupRPCImpl);
+      DataNodeBackupRPCImpl backupRPCImpl = new DataNodeBackupRPCImpl(backupProcessor, restoreProcessor);
+      datanode.ipcServer.addProtocol(RPC.RpcKind.RPC_WRITABLE, DataNodeBackupRPC.class, backupRPCImpl);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
