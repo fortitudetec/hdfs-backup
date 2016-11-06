@@ -23,7 +23,7 @@ This will execute all tests and build all of the binaries.
 
 Execute:
 ```
-cd s3-backup-store
+cd s3-backup/s3-backup-store
 ./run_parcel_server.sh
 ```
 
