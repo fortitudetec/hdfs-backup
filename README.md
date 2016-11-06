@@ -8,30 +8,14 @@ In the projects current state the blocks are replicated from the DataNodes to th
 
 Also the NameNode will run block reports to ensure that all blocks are replicated to the backup store.  During this process the NameNode will delete blocks from the backup store that BlockManager no longer references.
 
-## S3 Backup Setup
+## Backup Install
 
-### Install
-
-Execute:
-```
-mvn clean install
-```
+- S3 backup install and setup. See [S3 README](s3-backup/README.md).
+- Local backup install and setup. See [Local README](local-backup/README.md).
 
 This will execute all tests and build all of the binaries.
 
-#### CDH Parcel
-
-Execute:
-```
-cd s3-backup/s3-backup-store
-./run_parcel_server.sh
-```
-
-In Cloudera Manager add your computer as a parcel server (e.g. http://hostname:8000/).
-
-Now you will need to add the parcel to all the nodes running NameNode and DataNode processes.
-
-### Configure
+## Basic Configure
 
 ```
 <property>
@@ -50,59 +34,8 @@ Now you will need to add the parcel to all the nodes running NameNode and DataNo
   <name>dfs.backup.zookeeper.connection</name>
   <value><zookeeper connection>/backup</value>
 </property>
-
-<!-- Required S3 Backup Store Properties -->
-
 <property>
   <name>dfs.backup.store.key</name>
-  <value>backup.store.s3.S3BackupStore</value>
+  <value><backup store class></value>
 </property>
-<property>
-  <name>dfs.backup.s3.bucket.name</name>
-  <value>BUCKET_NAME</value>
-</property>
-
-<!-- Optional Properties -->
-<!--
-
-If the prefix is not provided the keys generated will be of the format:
-  <block pool id>/<block id>/<generation stamp>/<block length>
-
-If the prefix is provided the keys generated will be of the format:
-  <prefix>/<block pool id>/<block id>/<generation stamp>/<block length>
--->
-
-<property>
-  <name>dfs.backup.s3.object.prefix</name>
-  <value>hdfs-backup</value>
-</property>
-
-<!--
-
-The backup.store.s3.DefaultS3AWSCredentialsProviderFactory is used by default
-as the credentials provider.  The DefaultS3AWSCredentialsProviderFactory uses
-the AWS com.amazonaws.auth.DefaultAWSCredentialsProviderChain internally to
-determine the credentials.  
-
-This provider uses the following providers in order:
-
-* EnvironmentVariableCredentialsProvider
-* SystemPropertiesCredentialsProvider
-* ProfileCredentialsProvider
-* EC2ContainerCredentialsProviderWrapper
--->
-<property>
-  <name>dfs.backup.s3.credentials.provider.factory</name>
-  <value>backup.store.s3.DefaultS3AWSCredentialsProviderFactory</value>
-</property>
-
-<!--
-Maximum number of keys to fetch per iteration while walking the blocks stored
-in S3
--->
-<property>
-  <name>dfs.backup.s3.listing.maxkeys</name>
-  <value>10000</value>
-</property>
-
 ```
