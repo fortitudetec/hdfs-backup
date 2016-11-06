@@ -4,12 +4,12 @@
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>hdfs-backup</groupId>
-		<artifactId>hdfs-backup</artifactId>
+		<artifactId>s3-backup</artifactId>
 		<version>1.0</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 	<groupId>hdfs-backup</groupId>
-	<artifactId>local-backup-store-base</artifactId>
+	<artifactId>s3-backup-store-base</artifactId>
 	<packaging>jar</packaging>
 
 	<build>

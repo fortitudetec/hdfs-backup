@@ -21,12 +21,8 @@
 		<module>hdfs-backup-spi</module>
 		<module>hdfs-backup-core</module>
 		<module>hdfs-backup-test</module>
-		<module>local-backup-store</module>
-    <module>local-backup-store-base</module>
-		<module>local-backup-store-test</module>
-		<module>s3-backup-store</module>
-		<module>s3-backup-store-base</module>
-		<module>s3-backup-store-test</module>
+		<module>local-backup</module>
+		<module>s3-backup</module>
 	</modules>
 
 	<repositories>
