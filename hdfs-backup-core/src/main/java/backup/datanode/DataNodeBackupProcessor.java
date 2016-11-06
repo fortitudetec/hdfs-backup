@@ -1,3 +1,18 @@
+/*
+ * Copyright 2016 Fortitude Technologies LLC
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *     
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package backup.datanode;
 
 import static backup.BackupConstants.DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_DEFAULT;
@@ -28,9 +43,8 @@ import org.slf4j.LoggerFactory;
 
 import backup.BaseProcessor;
 import backup.store.BackupStore;
-import backup.store.ConfigurationConverter;
+import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
-import backup.store.ExtendedBlockConverter;
 import backup.store.LengthInputStream;
 import backup.store.WritableExtendedBlock;
 import backup.zookeeper.ZkUtils;
@@ -87,7 +101,7 @@ public class DataNodeBackupProcessor extends BaseProcessor {
     ZkUtils.mkNodesStr(zooKeeper, ZkUtils.createPath(LOCKS));
     lockManager = new ZooKeeperLockManager(zooKeeper, ZkUtils.createPath(LOCKS));
 
-    backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
+    backupStore = BackupStore.create(BackupUtil.convert(conf));
     start();
   }
 
@@ -162,7 +176,7 @@ public class DataNodeBackupProcessor extends BaseProcessor {
     if (lockManager.tryToLock(blockId)) {
       try {
         FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
-        org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = ExtendedBlockConverter.toHadoop(extendedBlock);
+        org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
         BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(heb);
         long numBytes = blockLocalPathInfo.getNumBytes();
         try (LengthInputStream data = new LengthInputStream(fsDataset.getBlockInputStream(heb, 0), numBytes)) {
@@ -207,7 +221,7 @@ public class DataNodeBackupProcessor extends BaseProcessor {
     FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
     boolean backupOccured = false;
     for (ExtendedBlock extendedBlock : blocks) {
-      if (fsDataset.getVolume(ExtendedBlockConverter.toHadoop(extendedBlock)) != null) {
+      if (fsDataset.getVolume(BackupUtil.toHadoop(extendedBlock)) != null) {
         // This datanode has the block
         backupBlock(extendedBlock);
         backupOccured = true;

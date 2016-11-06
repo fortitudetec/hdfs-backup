@@ -1,3 +1,18 @@
+/*
+ * Copyright 2016 Fortitude Technologies LLC
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *     
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package backup.integration;
 
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY;
@@ -55,11 +70,11 @@ import backup.BackupConstants;
 import backup.SingletonManager;
 import backup.datanode.BackupFsDatasetSpiFactory;
 import backup.datanode.DataNodeBackupServicePlugin;
-import backup.namenode.NameNodeRestoreProcessor;
 import backup.namenode.NameNodeBackupServicePlugin;
+import backup.namenode.NameNodeRestoreProcessor;
 import backup.store.BackupStore;
 import backup.store.BackupStoreClassHelper;
-import backup.store.ConfigurationConverter;
+import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
 import backup.zookeeper.ZkUtils;
@@ -67,10 +82,9 @@ import backup.zookeeper.ZooKeeperClient;
 
 public abstract class MiniClusterTestBase {
 
-  private static final String USER_HOME = "user.home";
-
   private final static Logger LOG = LoggerFactory.getLogger(MiniClusterTestBase.class);
 
+  protected static final String USER_HOME = "user.home";
   protected static final String LIB = "lib";
   protected static final String TESTS = "tests";
   protected static final String TAR_GZ = "tar.gz";
@@ -186,7 +200,7 @@ public abstract class MiniClusterTestBase {
       writeFile(fileSystem, path);
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-      BackupStore backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
+      BackupStore backupStore = BackupStore.create(BackupUtil.convert(conf));
       Set<ExtendedBlock> original = toSet(backupStore.getExtendedBlocks());
       destroyBackupStoreBlocks(backupStore);
 
@@ -225,7 +239,7 @@ public abstract class MiniClusterTestBase {
       writeFile(fileSystem, new Path("/testing3.txt"));
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-      BackupStore backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
+      BackupStore backupStore = BackupStore.create(BackupUtil.convert(conf));
       Set<ExtendedBlock> original = toSet(backupStore.getExtendedBlocks());
       destroyOneBackupStoreBlock(backupStore);
 
@@ -297,7 +311,7 @@ public abstract class MiniClusterTestBase {
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY, 6000);// 30000
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 6000);// 5*60*1000
 
-    org.apache.commons.configuration.Configuration configuration = ConfigurationConverter.convert(conf);
+    org.apache.commons.configuration.Configuration configuration = BackupUtil.convert(conf);
     setupBackupStore(configuration);
     Iterator<String> keys = configuration.getKeys();
     while (keys.hasNext()) {

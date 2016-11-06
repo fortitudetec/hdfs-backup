@@ -1,3 +1,18 @@
+/*
+ * Copyright 2016 Fortitude Technologies LLC
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *     
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package backup.datanode;
 
 import static backup.BackupConstants.DFS_BACKUP_DATANODE_RESTORE_BLOCK_HANDLER_COUNT_DEFAULT;
@@ -32,9 +47,8 @@ import com.google.common.io.Closer;
 
 import backup.Executable;
 import backup.store.BackupStore;
-import backup.store.ConfigurationConverter;
+import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
-import backup.store.ExtendedBlockConverter;
 import backup.store.WritableExtendedBlock;
 
 public class DataNodeRestoreProcessor implements Closeable {
@@ -65,7 +79,7 @@ public class DataNodeRestoreProcessor implements Closeable {
     this.pauseOnError = conf.getLong(DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_KEY,
         DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_DEFAULT);
 
-    backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
+    backupStore = BackupStore.create(BackupUtil.convert(conf));
     executorService = Executors.newFixedThreadPool(threads);
     closer.register((Closeable) () -> executorService.shutdownNow());
     for (int t = 0; t < threads; t++) {
@@ -106,7 +120,7 @@ public class DataNodeRestoreProcessor implements Closeable {
       return;
     }
     FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
-    org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = ExtendedBlockConverter.toHadoop(extendedBlock);
+    org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
     if (fsDataset.isValidBlock(heb)) {
       LOG.info("Block already restored {}", extendedBlock);
       return;

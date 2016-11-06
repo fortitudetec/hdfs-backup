@@ -1,3 +1,18 @@
+/*
+ * Copyright 2016 Fortitude Technologies LLC
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *     
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package backup.namenode;
 
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DEFAULT;
@@ -41,14 +56,10 @@ import backup.BaseProcessor;
 import backup.datanode.DataNodeBackupRPC;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
-import backup.store.ConfigurationConverter;
 import backup.store.ExtendedBlock;
-import backup.store.ExtendedBlockConverter;
 import backup.store.ExtendedBlockEnum;
-import backup.store.ExtendedBlockWithAddress;
 import backup.store.ExternalExtendedBlockSort;
 import backup.store.WritableExtendedBlock;
-import backup.store.WritableUtil;
 
 public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
@@ -68,7 +79,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor) throws Exception {
     this.conf = conf;
     this.processor = processor;
-    backupStore = BackupStore.create(ConfigurationConverter.convert(conf));
+    backupStore = BackupStore.create(BackupUtil.convert(conf));
     this.fileSystem = (DistributedFileSystem) FileSystem.get(conf);
     this.batchSize = conf.getInt(DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY, DFS_BACKUP_REMOTE_BACKUP_BATCH_DEFAULT);
     this.checkInterval = conf.getLong(DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_KEY,
@@ -256,7 +267,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
       for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
         DatanodeInfo[] locations = locatedBlock.getLocations();
-        ExtendedBlock extendedBlock = ExtendedBlockConverter.fromHadoop(locatedBlock.getBlock());
+        ExtendedBlock extendedBlock = BackupUtil.fromHadoop(locatedBlock.getBlock());
         nameNodeBlocks.add(extendedBlock, new Addresses(locations));
       }
     }
@@ -333,7 +344,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
         int len = ipAddrs.length;
         out.writeShort(len);
         for (int i = 0; i < len; i++) {
-          WritableUtil.writeShortString(ipAddrs[i], out);
+          BackupUtil.writeShortString(ipAddrs[i], out);
         }
       }
       {
@@ -349,7 +360,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     public void readFields(DataInput in) throws IOException {
       ipAddrs = new String[in.readShort()];
       for (int i = 0; i < ipAddrs.length; i++) {
-        ipAddrs[i] = WritableUtil.readShortString(in);
+        ipAddrs[i] = BackupUtil.readShortString(in);
       }
       ipcPorts = new int[in.readShort()];
       for (int i = 0; i < ipcPorts.length; i++) {
@@ -359,4 +370,22 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
   }
 
+  public static class ExtendedBlockWithAddress {
+    private final ExtendedBlock extendedBlock;
+    private final Addresses addresses;
+
+    public ExtendedBlockWithAddress(ExtendedBlock extendedBlock, Addresses addresses) {
+      this.extendedBlock = extendedBlock;
+      this.addresses = addresses;
+    }
+
+    public ExtendedBlock getExtendedBlock() {
+      return extendedBlock;
+    }
+
+    public Addresses getAddresses() {
+      return addresses;
+    }
+
+  }
 }

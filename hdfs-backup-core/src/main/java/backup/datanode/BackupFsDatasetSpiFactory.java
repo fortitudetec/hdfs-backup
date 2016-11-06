@@ -1,3 +1,18 @@
+/*
+ * Copyright 2016 Fortitude Technologies LLC
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *     
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package backup.datanode;
 
 import static backup.BackupConstants.DFS_DATANODE_BACKUP_FSDATASET_FACTORY_KEY;
@@ -18,7 +33,7 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsDatasetFactory;
 import org.apache.hadoop.util.ReflectionUtils;
 
 import backup.SingletonManager;
-import backup.store.ExtendedBlockConverter;
+import backup.store.BackupUtil;
 
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
@@ -41,8 +56,8 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
 
   private void setupBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
     if (backupProcessor == null) {
-      backupProcessor = SingletonManager.getManager(DataNodeBackupProcessor.class)
-                                        .getInstance(datanode, () -> new DataNodeBackupProcessor(conf, datanode));
+      backupProcessor = SingletonManager.getManager(DataNodeBackupProcessor.class).getInstance(datanode,
+          () -> new DataNodeBackupProcessor(conf, datanode));
     }
   }
 
@@ -82,10 +97,9 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
       try {
         Object result = method.invoke(datasetSpi, args);
-        if (method.getName()
-                  .equals(FINALIZE_BLOCK)) {
+        if (method.getName().equals(FINALIZE_BLOCK)) {
           ExtendedBlock extendedBlock = (ExtendedBlock) args[0];
-          backupProcessor.blockFinalized(ExtendedBlockConverter.fromHadoop(extendedBlock));
+          backupProcessor.blockFinalized(BackupUtil.fromHadoop(extendedBlock));
         }
         return result;
       } catch (InvocationTargetException e) {
