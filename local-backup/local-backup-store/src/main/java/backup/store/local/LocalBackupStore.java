@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.apache.commons.configuration.Configuration;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 
 import com.google.common.base.Splitter;
@@ -152,6 +153,11 @@ public class LocalBackupStore extends BackupStore {
 
   private String getBlockName(ExtendedBlock extendedBlock) {
     return Long.toString(extendedBlock.getBlockId()) + "_" + Long.toString(extendedBlock.getGenerationStamp());
+  }
+
+  @Override
+  public void destroyAllBlocks() throws Exception {
+    FileUtils.deleteDirectory(dir);
   }
 
 }

@@ -10,6 +10,7 @@ import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_OBJECT_PREFIX_
 
 import java.io.InputStream;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.configuration.Configuration;
@@ -17,6 +18,7 @@ import org.apache.commons.configuration.Configuration;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
+import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
@@ -65,13 +67,17 @@ public class S3BackupStore extends BackupStore {
     objectPrefix = conf.getString(DFS_BACKUP_S3_OBJECT_PREFIX_KEY);
     maxKeys = conf.getInt(DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, DFS_BACKUP_S3_LISTING_MAXKEYS_DEFAULT);
     s3Client = new AmazonS3Client(credentialsProviderFactory.getCredentials());
-    s3Client.setEndpoint(conf.getString(DFS_BACKUP_S3_ENDPOINT, s3Client.getEndpointPrefix()));
+    String endpoint = conf.getString(DFS_BACKUP_S3_ENDPOINT);
+    if (endpoint != null) {
+      s3Client.setEndpoint(endpoint);
+    }
   }
 
   @SuppressWarnings("unchecked")
   private Class<? extends S3AWSCredentialsProviderFactory> getCredentialsProviderFactory(String classname)
       throws ClassNotFoundException {
-    return (Class<? extends S3AWSCredentialsProviderFactory>) getClass().getClassLoader().loadClass(classname);
+    return (Class<? extends S3AWSCredentialsProviderFactory>) getClass().getClassLoader()
+                                                                        .loadClass(classname);
   }
 
   protected AmazonS3Client getAmazonS3Client() throws Exception {
@@ -112,8 +118,10 @@ public class S3BackupStore extends BackupStore {
 
     private ListObjectsV2Request createObjectRequest(String bucketName, String extendedBlocksPrefix,
         String startAfter) {
-      return new ListObjectsV2Request().withBucketName(bucketName).withPrefix(extendedBlocksPrefix)
-          .withStartAfter(startAfter).withMaxKeys(maxKeys);
+      return new ListObjectsV2Request().withBucketName(bucketName)
+                                       .withPrefix(extendedBlocksPrefix)
+                                       .withStartAfter(startAfter)
+                                       .withMaxKeys(maxKeys);
     }
 
     @Override
@@ -137,7 +145,8 @@ public class S3BackupStore extends BackupStore {
     private void nextListing() {
       ListObjectsV2Request request = createObjectRequest(bucketName, extendedBlocksPrefix, startAfter);
       listObjectsV2 = client.listObjectsV2(request);
-      iterator = listObjectsV2.getObjectSummaries().iterator();
+      iterator = listObjectsV2.getObjectSummaries()
+                              .iterator();
     }
 
     @Override
@@ -272,6 +281,23 @@ public class S3BackupStore extends BackupStore {
       return FileType.meta.name();
     } else {
       return JOINER.join(objectPrefix, FileType.meta.name());
+    }
+  }
+
+  @Override
+  public void destroyAllBlocks() throws Exception {
+    AmazonS3Client client = getAmazonS3Client();
+    try {
+      ObjectListing listObjects = client.listObjects(bucketName);
+      List<S3ObjectSummary> objectSummaries = listObjects.getObjectSummaries();
+      for (S3ObjectSummary objectSummary : objectSummaries) {
+        String key = objectSummary.getKey();
+        if (objectPrefix == null || key.startsWith(objectPrefix)) {
+          client.deleteObject(bucketName, key);
+        }
+      }
+    } finally {
+      releaseAmazonS3Client(client);
     }
   }
 

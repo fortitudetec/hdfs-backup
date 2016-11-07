@@ -16,7 +16,8 @@ public abstract class BackupStore extends Configured implements Closeable {
     Class<? extends BackupStore> clazz;
     try {
       String classname = conf.getString(DFS_BACKUP_STORE_KEY, DFS_BACKUP_STORE_DEFAULT);
-      clazz = (Class<? extends BackupStore>) BackupStore.class.getClassLoader().loadClass(classname);
+      clazz = (Class<? extends BackupStore>) BackupStore.class.getClassLoader()
+                                                              .loadClass(classname);
     } catch (Exception e) {
       String classname = conf.getString(DFS_BACKUP_STORE_KEY);
       clazz = (Class<? extends BackupStore>) BackupStoreClassHelper.tryToFindPlugin(classname);
@@ -52,6 +53,9 @@ public abstract class BackupStore extends Configured implements Closeable {
    */
   public abstract InputStream getDataInputStream(ExtendedBlock extendedBlock) throws Exception;
 
+  /**
+   * Get a stream of the {@link ExtendedBlock}s from the store.
+   */
   public abstract ExtendedBlockEnum<Void> getExtendedBlocks() throws Exception;
 
   /**
@@ -59,6 +63,14 @@ public abstract class BackupStore extends Configured implements Closeable {
    */
   public abstract void deleteBlock(ExtendedBlock extendedBlock) throws Exception;
 
+  /**
+   * Deletes all blocks from the backup store.
+   */
+  public abstract void destroyAllBlocks() throws Exception;
+
+  /**
+   * Called when backup store is no longer in use.
+   */
   public void close() throws IOException {
 
   }

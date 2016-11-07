@@ -94,8 +94,6 @@ public abstract class MiniClusterTestBase {
   protected final String zkConnection = "localhost/backup";
   protected boolean classLoaderLoaded;
 
-  protected abstract void teardownBackupStore() throws Exception;
-
   protected abstract void setupBackupStore(org.apache.commons.configuration.Configuration conf) throws Exception;
 
   protected abstract String testArtifactId();
@@ -175,7 +173,7 @@ public abstract class MiniClusterTestBase {
         thread.interrupt();
       }
       hdfsCluster.shutdown();
-      teardownBackupStore();
+      destroyBackupStore(conf);
     }
   }
 
@@ -205,7 +203,7 @@ public abstract class MiniClusterTestBase {
 
       NameNode nameNode = hdfsCluster.getNameNode();
       NameNodeRestoreProcessor processor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
-          .getInstance(nameNode);
+                                                           .getInstance(nameNode);
       processor.runBlockCheck();
 
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
@@ -219,7 +217,13 @@ public abstract class MiniClusterTestBase {
         thread.interrupt();
       }
       hdfsCluster.shutdown();
-      teardownBackupStore();
+      destroyBackupStore(conf);
+    }
+  }
+
+  private void destroyBackupStore(Configuration conf) throws Exception {
+    try (BackupStore backupStore = BackupStore.create(BackupUtil.convert(conf))) {
+      backupStore.destroyAllBlocks();
     }
   }
 
@@ -244,7 +248,7 @@ public abstract class MiniClusterTestBase {
       NameNode nameNode = hdfsCluster.getNameNode();
 
       NameNodeRestoreProcessor processor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
-          .getInstance(nameNode);
+                                                           .getInstance(nameNode);
       processor.runBlockCheck();
 
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
@@ -258,7 +262,7 @@ public abstract class MiniClusterTestBase {
         thread.interrupt();
       }
       hdfsCluster.shutdown();
-      teardownBackupStore();
+      destroyBackupStore(conf);
     }
   }
 
@@ -362,7 +366,8 @@ public abstract class MiniClusterTestBase {
         if (entry.isDirectory()) {
           f.mkdirs();
         } else {
-          f.getParentFile().mkdirs();
+          f.getParentFile()
+           .mkdirs();
           try (OutputStream out = new BufferedOutputStream(new FileOutputStream(f))) {
             IOUtils.copy(tarInput, out);
           }
@@ -374,7 +379,8 @@ public abstract class MiniClusterTestBase {
 
   private static File findLibDir(File file) {
     if (file.isDirectory()) {
-      if (file.getName().equals(LIB)) {
+      if (file.getName()
+              .equals(LIB)) {
         return file;
       }
       for (File f : file.listFiles()) {

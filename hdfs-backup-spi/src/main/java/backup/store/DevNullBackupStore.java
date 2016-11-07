@@ -40,4 +40,9 @@ public class DevNullBackupStore extends BackupStore {
 
   }
 
+  @Override
+  public void destroyAllBlocks() throws Exception {
+
+  }
+
 }
