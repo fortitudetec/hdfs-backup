@@ -8,10 +8,9 @@
 	<version>1.0</version>
 
 	<properties>
-		<maven.build.timestamp.format>yyyyMMddHHmmss</maven.build.timestamp.format>
-		<timestamp>${maven.build.timestamp}</timestamp>
 		<parcel.assembly.file>src/assemble/parcel.xml</parcel.assembly.file>
-		<parcel.version>${project.version}.${timestamp}</parcel.version>
+		<parcel.version.suffix></parcel.version.suffix>
+		<parcel.version>${project.version}${parcel.version.suffix}</parcel.version>
 		<hadoop.version>2.6.0-cdh5.9.0</hadoop.version>
 	</properties>
 

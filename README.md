@@ -10,12 +10,19 @@ Also the NameNode will run block reports to ensure that all blocks are replicate
 
 ## Backup Install
 
-- S3 backup install and setup. See [S3 README](s3-backup/README.md).
-- Local backup install and setup. See [Local README](local-backup/README.md).
+Build and install projects:
+```
+mvn clean install [-Dparcel.version.suffix=<version>]
+```
+
+The opiontal ```-Dparcel.version.suffix=<version>``` is helpful when you are testing and deploying new versions of parcels to Cloudera Manager because it provides a way to change the version of the parcel between builds.
+
+- S3 backup configuration. See [S3 README](s3-backup/README.md).
+- Local backup configuration. See [Local README](local-backup/README.md).
 
 This will execute all tests and build all of the binaries.
 
-## Basic Configure
+## Basic Required HDFS Configuration
 
 ```
 <property>
@@ -34,8 +41,17 @@ This will execute all tests and build all of the binaries.
   <name>dfs.backup.zookeeper.connection</name>
   <value><zookeeper connection>/backup</value>
 </property>
-<property>
-  <name>dfs.backup.store.key</name>
-  <value><backup store class></value>
-</property>
 ```
+
+## Generic HDFS Installation
+
+TODO
+
+## CDH Parcel Script
+
+Execute:
+```
+./run_parcel_server.sh [-Dparcel.version.suffix=<version>]
+```
+
+In Cloudera Manager add your computer as a parcel server (e.g. http://hostname:8000/).
