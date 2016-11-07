@@ -31,13 +31,6 @@
 		<dependency>
 			<groupId>hdfs-backup</groupId>
 			<artifactId>hdfs-backup-test</artifactId>
-			<type>test-jar</type>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>hdfs-backup</groupId>
-			<artifactId>hdfs-backup-spi</artifactId>
-			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

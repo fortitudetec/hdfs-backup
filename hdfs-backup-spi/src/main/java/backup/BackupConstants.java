@@ -55,6 +55,9 @@ public class BackupConstants {
   public static final String DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_KEY = "dfs.backup.datanode.restore.error.pause";
   public static final long DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_DEFAULT = TimeUnit.SECONDS.toMillis(3);
 
+  public static final String DFS_BACKUP_DATANODE_BACKUP_ERROR_PAUSE_KEY = "dfs.backup.datanode.backup.error.pause";
+  public static final long DFS_BACKUP_DATANODE_BACKUP_ERROR_PAUSE_DEFAULT = TimeUnit.SECONDS.toMillis(3);
+  
   public static final String DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY = "dfs.backup.namenode.missing.blocks.poll.time";
   public static final long DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT = TimeUnit.SECONDS.toMillis(10);
 

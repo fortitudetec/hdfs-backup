@@ -194,13 +194,12 @@ public abstract class MiniClusterTestBase {
 
     MiniDFSCluster hdfsCluster = new MiniDFSCluster.Builder(conf).build();
     Thread thread = null;
-    try {
+    try (BackupStore backupStore = BackupStore.create(BackupUtil.convert(conf))) {
       DistributedFileSystem fileSystem = hdfsCluster.getFileSystem();
       Path path = new Path("/testing.txt");
       writeFile(fileSystem, path);
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-      BackupStore backupStore = BackupStore.create(BackupUtil.convert(conf));
       Set<ExtendedBlock> original = toSet(backupStore.getExtendedBlocks());
       destroyBackupStoreBlocks(backupStore);
 
@@ -232,14 +231,13 @@ public abstract class MiniClusterTestBase {
 
     MiniDFSCluster hdfsCluster = new MiniDFSCluster.Builder(conf).build();
     Thread thread = null;
-    try {
+    try (BackupStore backupStore = BackupStore.create(BackupUtil.convert(conf))) {
       DistributedFileSystem fileSystem = hdfsCluster.getFileSystem();
       writeFile(fileSystem, new Path("/testing1.txt"));
       writeFile(fileSystem, new Path("/testing2.txt"));
       writeFile(fileSystem, new Path("/testing3.txt"));
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-      BackupStore backupStore = BackupStore.create(BackupUtil.convert(conf));
       Set<ExtendedBlock> original = toSet(backupStore.getExtendedBlocks());
       destroyOneBackupStoreBlock(backupStore);
 
@@ -313,6 +311,7 @@ public abstract class MiniClusterTestBase {
 
     org.apache.commons.configuration.Configuration configuration = BackupUtil.convert(conf);
     setupBackupStore(configuration);
+    @SuppressWarnings("unchecked")
     Iterator<String> keys = configuration.getKeys();
     while (keys.hasNext()) {
       String key = keys.next();

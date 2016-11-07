@@ -289,7 +289,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
   @Override
   protected void closeInternal() {
-
+    IOUtils.closeQuietly(backupStore);
   }
 
   @Override

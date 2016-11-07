@@ -50,26 +50,13 @@
 			</dependency>
 			<dependency>
 				<groupId>hdfs-backup</groupId>
-				<artifactId>hdfs-backup-common</artifactId>
-				<version>${project.version}</version>
-				<type>test-jar</type>
-			</dependency>
-			<dependency>
-				<groupId>hdfs-backup</groupId>
 				<artifactId>hdfs-backup-core</artifactId>
 				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>hdfs-backup</groupId>
-				<artifactId>hdfs-backup-core</artifactId>
-				<version>${project.version}</version>
-				<type>test-jar</type>
 			</dependency>
 			<dependency>
 				<groupId>hdfs-backup</groupId>
 				<artifactId>hdfs-backup-test</artifactId>
 				<version>${project.version}</version>
-				<type>test-jar</type>
 			</dependency>
 			<dependency>
 				<groupId>hdfs-backup</groupId>

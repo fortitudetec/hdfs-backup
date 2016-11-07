@@ -25,7 +25,7 @@ public abstract class BaseProcessor implements Runnable, Closeable {
 
   private final static Logger LOG = LoggerFactory.getLogger(BaseProcessor.class);
 
-  private final AtomicBoolean running = new AtomicBoolean(true);
+  protected final AtomicBoolean running = new AtomicBoolean(true);
   private Thread thread;
 
   protected void start() {

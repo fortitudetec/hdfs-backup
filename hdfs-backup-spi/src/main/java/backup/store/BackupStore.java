@@ -3,19 +3,20 @@ package backup.store;
 import static backup.BackupConstants.DFS_BACKUP_STORE_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_STORE_KEY;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.io.InputStream;
 
 import org.apache.commons.configuration.Configuration;
 
-public abstract class BackupStore extends Configured {
+public abstract class BackupStore extends Configured implements Closeable {
 
   @SuppressWarnings("unchecked")
   public synchronized static BackupStore create(Configuration conf) throws Exception {
     Class<? extends BackupStore> clazz;
     try {
       String classname = conf.getString(DFS_BACKUP_STORE_KEY, DFS_BACKUP_STORE_DEFAULT);
-      clazz = (Class<? extends BackupStore>) BackupStore.class.getClassLoader()
-                                                              .loadClass(classname);
+      clazz = (Class<? extends BackupStore>) BackupStore.class.getClassLoader().loadClass(classname);
     } catch (Exception e) {
       String classname = conf.getString(DFS_BACKUP_STORE_KEY);
       clazz = (Class<? extends BackupStore>) BackupStoreClassHelper.tryToFindPlugin(classname);
@@ -57,4 +58,8 @@ public abstract class BackupStore extends Configured {
    * Removes block from the backup store.
    */
   public abstract void deleteBlock(ExtendedBlock extendedBlock) throws Exception;
+
+  public void close() throws IOException {
+
+  }
 }

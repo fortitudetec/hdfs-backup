@@ -61,7 +61,6 @@ public class DataNodeRestoreProcessor implements Closeable {
   private final Type checksumType;
   private final BlockingQueue<ExtendedBlock> restoreBlocks = new LinkedBlockingQueue<>();
   private final ExecutorService executorService;
-  private final long pauseOnError;
   private final Closer closer;
   private final AtomicBoolean running = new AtomicBoolean(true);
 
@@ -72,19 +71,15 @@ public class DataNodeRestoreProcessor implements Closeable {
         DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_DEFAULT);
     this.checksumType = Type
         .valueOf(conf.get(DFSConfigKeys.DFS_CHECKSUM_TYPE_KEY, DFSConfigKeys.DFS_CHECKSUM_TYPE_DEFAULT));
-
     int threads = conf.getInt(DFS_BACKUP_DATANODE_RESTORE_BLOCK_HANDLER_COUNT_KEY,
         DFS_BACKUP_DATANODE_RESTORE_BLOCK_HANDLER_COUNT_DEFAULT);
-
-    this.pauseOnError = conf.getLong(DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_KEY,
+    long pauseOnError = conf.getLong(DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_KEY,
         DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_DEFAULT);
-
-    backupStore = BackupStore.create(BackupUtil.convert(conf));
-    executorService = Executors.newFixedThreadPool(threads);
+    backupStore = closer.register(BackupStore.create(BackupUtil.convert(conf)));
+    executorService = Executors.newCachedThreadPool();
     closer.register((Closeable) () -> executorService.shutdownNow());
     for (int t = 0; t < threads; t++) {
-      Runnable runnable = Executable.createDaemon(LOG, pauseOnError, running, () -> restoreBlocks());
-      executorService.submit(runnable);
+      executorService.submit(Executable.createDaemon(LOG, pauseOnError, running, () -> restoreBlocks()));
     }
   }
 

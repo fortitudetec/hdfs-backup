@@ -22,7 +22,7 @@ import org.apache.commons.configuration.Configuration;
 import backup.BackupConstants;
 import backup.integration.MiniClusterTestBase;
 
-public class S3BackupStoreMiniClusterTestBase extends MiniClusterTestBase {
+public class S3BackupStoreMiniClusterTest extends MiniClusterTestBase {
 
   private final String backupBucket = "test-hdfs-backup-bucket";
   private final String prefix = "test-hdfs-backup-" + UUID.randomUUID().toString();

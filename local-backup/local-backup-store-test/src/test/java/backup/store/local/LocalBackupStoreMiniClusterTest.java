@@ -24,7 +24,7 @@ import org.apache.commons.io.FileUtils;
 import backup.BackupConstants;
 import backup.integration.MiniClusterTestBase;
 
-public class LocalBackupStoreMiniClusterTestBase extends MiniClusterTestBase {
+public class LocalBackupStoreMiniClusterTest extends MiniClusterTestBase {
 
   private final File tmp = new File("./target/tmp");
   private final File backup = new File(tmp, "backup");

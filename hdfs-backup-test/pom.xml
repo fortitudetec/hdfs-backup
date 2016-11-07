@@ -13,73 +13,61 @@
 	<packaging>jar</packaging>
 
 	<dependencies>
-		<!-- Tests -->
 		<dependency>
-				<groupId>commons-io</groupId>
-				<artifactId>commons-io</artifactId>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.12</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.codehaus.plexus</groupId>
 			<artifactId>plexus-archiver</artifactId>
 			<version>3.4</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.codehaus.plexus</groupId>
 			<artifactId>plexus-container-default</artifactId>
 			<version>1.7.1</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.maven</groupId>
 			<artifactId>maven-aether-provider</artifactId>
 			<version>3.3.9</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.eclipse.aether</groupId>
 			<artifactId>aether-transport-http</artifactId>
 			<version>1.1.0</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.eclipse.aether</groupId>
 			<artifactId>aether-transport-file</artifactId>
 			<version>1.1.0</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.eclipse.aether</groupId>
 			<artifactId>aether-connector-basic</artifactId>
 			<version>1.1.0</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>javassist</groupId>
 			<artifactId>javassist</artifactId>
 			<version>3.12.1.GA</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
 			<artifactId>hadoop-minicluster</artifactId>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.hadoop</groupId>
 			<artifactId>hadoop-client</artifactId>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>hdfs-backup</groupId>
 			<artifactId>hdfs-backup-core</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>hdfs-backup</groupId>
-			<artifactId>hdfs-backup-spi</artifactId>
-			<type>test-jar</type>
-			<scope>test</scope>
 		</dependency>
 	</dependencies>
 

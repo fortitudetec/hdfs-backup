@@ -39,8 +39,7 @@ public class TestS3BackupStore {
 
   private static final Configuration conf = new BaseConfiguration();
   private static final String backupBucket = "test-hdfs-backup-bucket";
-  private static final String prefix = "test-hdfs-backup-" + UUID.randomUUID()
-                                                                 .toString();
+  private static final String prefix = "test-hdfs-backup-" + UUID.randomUUID().toString();
 
   private static boolean createdBucket;
   private ThreadLocal<Random> random = new ThreadLocal<Random>() {
@@ -73,35 +72,37 @@ public class TestS3BackupStore {
 
   @Test
   public void testHasBlock() throws Exception {
-    BackupStore backupStore = BackupStore.create(conf);
-    String poolId = "poolid";
-    ExtendedBlock extendedBlock = createExtendedBlock(poolId);
-    backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getLength()),
-        createInputStream(extendedBlock.getLength()));
-    assertTrue(backupStore.hasBlock(extendedBlock));
+    try (BackupStore backupStore = BackupStore.create(conf)) {
+      String poolId = "poolid";
+      ExtendedBlock extendedBlock = createExtendedBlock(poolId);
+      backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getLength()),
+          createInputStream(extendedBlock.getLength()));
+      assertTrue(backupStore.hasBlock(extendedBlock));
+    }
   }
 
   @Test
   public void testGetExtendedBlocks() throws Exception {
-    BackupStore backupStore = BackupStore.create(conf);
-    String poolId = "poolid";
-    List<ExtendedBlock> blocks = new ArrayList<>();
-    for (int i = 0; i < 100; i++) {
-      ExtendedBlock extendedBlock = createExtendedBlock(poolId);
-      backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getLength()),
-          createInputStream(extendedBlock.getLength()));
-      blocks.add(extendedBlock);
-    }
-    Thread.sleep(1000);
-    ExtendedBlockEnum<Void> extendedBlocks = backupStore.getExtendedBlocks();
-    ExtendedBlock block;
-    List<ExtendedBlock> remoteBlocks = new ArrayList<>();
-    while ((block = extendedBlocks.next()) != null) {
-      remoteBlocks.add(block);
-    }
+    try (BackupStore backupStore = BackupStore.create(conf)) {
+      String poolId = "poolid";
+      List<ExtendedBlock> blocks = new ArrayList<>();
+      for (int i = 0; i < 100; i++) {
+        ExtendedBlock extendedBlock = createExtendedBlock(poolId);
+        backupStore.backupBlock(extendedBlock, createInputStream(extendedBlock.getLength()),
+            createInputStream(extendedBlock.getLength()));
+        blocks.add(extendedBlock);
+      }
+      Thread.sleep(1000);
+      ExtendedBlockEnum<Void> extendedBlocks = backupStore.getExtendedBlocks();
+      ExtendedBlock block;
+      List<ExtendedBlock> remoteBlocks = new ArrayList<>();
+      while ((block = extendedBlocks.next()) != null) {
+        remoteBlocks.add(block);
+      }
 
-    for (ExtendedBlock extendedBlock : blocks) {
-      assertTrue(remoteBlocks.contains(extendedBlock));
+      for (ExtendedBlock extendedBlock : blocks) {
+        assertTrue(remoteBlocks.contains(extendedBlock));
+      }
     }
   }
 
@@ -115,8 +116,7 @@ public class TestS3BackupStore {
 
   private LengthInputStream createInputStream(long len) {
     byte[] buf = new byte[(int) len];
-    random.get()
-          .nextBytes(buf);
+    random.get().nextBytes(buf);
     return new LengthInputStream(new ByteArrayInputStream(buf), len);
   }
 }
