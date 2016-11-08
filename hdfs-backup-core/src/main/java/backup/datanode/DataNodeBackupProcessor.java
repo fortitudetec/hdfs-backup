@@ -23,7 +23,8 @@ import static backup.BackupConstants.DFS_BACKUP_DATANODE_CHECK_POLL_TIME_DEFAULT
 import static backup.BackupConstants.DFS_BACKUP_DATANODE_CHECK_POLL_TIME_KEY;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY;
-import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION;
+import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY;
+import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY;
 import static backup.BackupConstants.LOCKS;
 
@@ -91,10 +92,11 @@ public class DataNodeBackupProcessor implements Closeable {
     for (int t = 1; t < threads; t++) {
       executorService.submit(Executable.createDaemon(LOG, pauseOnError, running, () -> backupBlocks()));
     }
-    int zkSessionTimeout = conf.getInt(DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY, 30000);
-    String zkConnectionString = conf.get(DFS_BACKUP_ZOOKEEPER_CONNECTION);
+    
+    int zkSessionTimeout = conf.getInt(DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY, DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT);
+    String zkConnectionString = conf.get(DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY);
     if (zkConnectionString == null) {
-      throw new RuntimeException("ZooKeeper connection string missing [" + DFS_BACKUP_ZOOKEEPER_CONNECTION + "].");
+      throw new RuntimeException("ZooKeeper connection string missing [" + DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY + "].");
     }
     zooKeeper = closer.register(ZkUtils.newZooKeeper(zkConnectionString, zkSessionTimeout));
     ZkUtils.mkNodesStr(zooKeeper, ZkUtils.createPath(LOCKS));

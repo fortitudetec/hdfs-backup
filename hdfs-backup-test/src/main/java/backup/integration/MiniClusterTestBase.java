@@ -306,7 +306,7 @@ public abstract class MiniClusterTestBase {
     conf.set(DFSConfigKeys.DFS_DATANODE_PLUGINS_KEY, DataNodeBackupServicePlugin.class.getName());
     conf.set(DFSConfigKeys.DFS_NAMENODE_PLUGINS_KEY, NameNodeBackupServicePlugin.class.getName());
 
-    conf.set(BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION, zkConnection);
+    conf.set(BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY, zkConnection);
 
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 2);// 3
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_MINIMUM_INTERVAL_KEY, 2);// 3
