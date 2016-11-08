@@ -16,8 +16,7 @@ function buildHttpDir {
 
   PARCEL_NAME=`mvn help:evaluate $MAVEN_ARGS -Dexpression=parcel.name | grep -Ev '(^\[|Download\w+:)'`
 
-  LAST_UPDATED_SEC=`date +%s`
-  LAST_UPDATED="${LAST_UPDATED_SEC}0000"
+
 
   PARCEL="${TARGET}/${PARCEL_NAME}-${PARCEL_VERSION}.tar.gz"
   PARCEL_SHA="${PARCEL}.sha"
@@ -46,6 +45,9 @@ cd "$BASE_PROJECT_DIR"
 HTTP_DIR="$BASE_PROJECT_DIR/target/tmp-http"
 rm -r $HTTP_DIR
 mkdir -p $HTTP_DIR
+
+LAST_UPDATED_SEC=`date +%s`
+LAST_UPDATED="${LAST_UPDATED_SEC}0000"
 
 MANIFEST="${HTTP_DIR}/manifest.json"
 echo "{\"lastUpdated\":${LAST_UPDATED},\"parcels\": [" > $MANIFEST
