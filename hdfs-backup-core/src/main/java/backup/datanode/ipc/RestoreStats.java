@@ -10,17 +10,20 @@ public class RestoreStats implements Writable {
 
   private int restoreBlocks;
   private int restoresInProgressCount;
+  private double restoreBytesPerSecond;
 
   @Override
   public void write(DataOutput out) throws IOException {
     out.writeInt(restoreBlocks);
     out.writeInt(restoresInProgressCount);
+    out.writeDouble(restoreBytesPerSecond);
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
     restoreBlocks = in.readInt();
     restoresInProgressCount = in.readInt();
+    restoreBytesPerSecond = in.readDouble();
   }
 
   public int getRestoreBlocks() {
@@ -37,6 +40,14 @@ public class RestoreStats implements Writable {
 
   public void setRestoresInProgressCount(int restoresInProgressCount) {
     this.restoresInProgressCount = restoresInProgressCount;
+  }
+
+  public double getRestoreBytesPerSecond() {
+    return restoreBytesPerSecond;
+  }
+
+  public void setRestoreBytesPerSecond(double restoreBytesPerSecond) {
+    this.restoreBytesPerSecond = restoreBytesPerSecond;
   }
 
 }

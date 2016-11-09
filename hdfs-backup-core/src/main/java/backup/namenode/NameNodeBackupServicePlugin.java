@@ -15,6 +15,8 @@
  */
 package backup.namenode;
 
+import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT;
+import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_KEY;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_KEY;
 
@@ -39,9 +41,11 @@ import backup.namenode.ipc.NameNodeBackupRPCImpl;
 public class NameNodeBackupServicePlugin extends Configured implements ServicePlugin {
 
   private final static Logger LOG = LoggerFactory.getLogger(NameNodeBackupServicePlugin.class);
-  
+
   private NameNodeRestoreProcessor restoreProcessor;
   private Server server;
+
+  private NameNodeStatusServer httpServer;
 
   @Override
   public void start(Object service) {
@@ -71,6 +75,13 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
                                          .build();
       server.start();
       LOG.info("NameNode Backup RPC listening on {}", port);
+
+      int httpPort = getConf().getInt(DFS_BACKUP_NAMENODE_HTTP_PORT_KEY, DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT);
+      if (httpPort != 0) {
+        LOG.info("NameNode Backup HTTP listening on {}", httpPort);
+        httpServer = new NameNodeStatusServer(nodeBackupRPCImpl, httpPort);
+        httpServer.start();
+      }
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -81,6 +92,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     if (server != null) {
       server.stop();
     }
+    IOUtils.closeQuietly(httpServer);
     IOUtils.closeQuietly(restoreProcessor);
   }
 

@@ -50,7 +50,9 @@ public interface DataNodeBackupRPC {
 
   void backupBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
 
-  void restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
+  boolean restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
+  
+  boolean isRestoringBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
 
   BackupStats getBackupStats() throws IOException;
 

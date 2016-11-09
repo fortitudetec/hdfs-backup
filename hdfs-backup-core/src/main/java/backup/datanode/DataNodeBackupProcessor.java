@@ -30,6 +30,7 @@ import static backup.BackupConstants.LOCKS;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -76,6 +77,7 @@ public class DataNodeBackupProcessor implements Closeable {
   private final Closer closer;
   private final AtomicBoolean running = new AtomicBoolean(true);
   private final AtomicInteger backupsInProgress = new AtomicInteger();
+  private final Meter bytesPerSecond = new Meter();
 
   public DataNodeBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
     this.closer = Closer.create();
@@ -111,6 +113,7 @@ public class DataNodeBackupProcessor implements Closeable {
     backupStats.setBackupsInProgressCount(backupsInProgress.get());
     backupStats.setFinializedBlocksSizeCount(finializedBlocks.size());
     backupStats.setFutureChecksSizeCount(futureChecks.size());
+    backupStats.setBackupBytesPerSecond(bytesPerSecond.getCountPerSecond());
     return backupStats;
   }
 
@@ -159,10 +162,11 @@ public class DataNodeBackupProcessor implements Closeable {
         org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
         BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(heb);
         long numBytes = blockLocalPathInfo.getNumBytes();
-        try (LengthInputStream data = new LengthInputStream(fsDataset.getBlockInputStream(heb, 0), numBytes)) {
+        try (LengthInputStream data = new LengthInputStream(trackThroughPut(fsDataset.getBlockInputStream(heb, 0)),
+            numBytes)) {
           org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta = fsDataset.getMetaDataInputStream(
               heb);
-          try (LengthInputStream meta = new LengthInputStream(tmeta, tmeta.getLength())) {
+          try (LengthInputStream meta = new LengthInputStream(trackThroughPut(tmeta), tmeta.getLength())) {
             backupStore.backupBlock(extendedBlock, data, meta);
           }
         }
@@ -175,6 +179,10 @@ public class DataNodeBackupProcessor implements Closeable {
       // the near future.
       addToFutureChecks(extendedBlock);
     }
+  }
+
+  private InputStream trackThroughPut(InputStream input) {
+    return new ThroughPutInputStream(input, bytesPerSecond.getCounter());
   }
 
   private void addToFutureChecks(ExtendedBlock extendedBlock) {

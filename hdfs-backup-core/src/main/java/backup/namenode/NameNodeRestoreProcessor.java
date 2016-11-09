@@ -59,7 +59,7 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     this.namesystem = namenode.getNamesystem();
     this.blockManager = namesystem.getBlockManager();
     Cache<ExtendedBlock, Boolean> cache = CacheBuilder.newBuilder()
-                                                      .expireAfterWrite(1, TimeUnit.MINUTES)
+                                                      .expireAfterWrite(10, TimeUnit.MINUTES)
                                                       .build();
     currentRequestedRestore = Collections.newSetFromMap(cache.asMap());
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
@@ -105,9 +105,10 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
                                                     .getDatanodes();
     DatanodeInfo datanodeInfo = getDataNodeAddress(datanodes);
     DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeInfo, conf);
-    backup.restoreBlock(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
-        extendedBlock.getGenerationStamp());
-    currentRequestedRestore.add(extendedBlock);
+    if (backup.restoreBlock(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
+        extendedBlock.getGenerationStamp())) {
+      currentRequestedRestore.add(extendedBlock);
+    }
   }
 
   private DatanodeInfo getDataNodeAddress(Set<DatanodeDescriptor> storages) {

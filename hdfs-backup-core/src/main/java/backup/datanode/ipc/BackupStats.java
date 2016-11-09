@@ -11,12 +11,14 @@ public class BackupStats implements Writable {
   private int finializedBlocksSizeCount;
   private int futureChecksSizeCount;
   private int backupsInProgressCount;
+  private double backupBytesPerSecond;
 
   @Override
   public void write(DataOutput out) throws IOException {
     out.writeInt(finializedBlocksSizeCount);
     out.writeInt(futureChecksSizeCount);
     out.writeInt(backupsInProgressCount);
+    out.writeDouble(backupBytesPerSecond);
   }
 
   @Override
@@ -24,6 +26,7 @@ public class BackupStats implements Writable {
     finializedBlocksSizeCount = in.readInt();
     futureChecksSizeCount = in.readInt();
     backupsInProgressCount = in.readInt();
+    backupBytesPerSecond = in.readDouble();
   }
 
   public int getFinializedBlocksSizeCount() {
@@ -48,6 +51,14 @@ public class BackupStats implements Writable {
 
   public void setBackupsInProgressCount(int backupsInProgressCount) {
     this.backupsInProgressCount = backupsInProgressCount;
+  }
+
+  public double getBackupBytesPerSecond() {
+    return backupBytesPerSecond;
+  }
+
+  public void setBackupBytesPerSecond(double backupBytesPerSecond) {
+    this.backupBytesPerSecond = backupBytesPerSecond;
   }
 
 }

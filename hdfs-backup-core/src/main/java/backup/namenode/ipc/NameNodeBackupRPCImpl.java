@@ -8,11 +8,15 @@ import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import backup.datanode.ipc.DataNodeBackupRPC;
 import backup.namenode.NameNodeRestoreProcessor;
 
 public class NameNodeBackupRPCImpl implements NameNodeBackupRPC {
+
+  private final static Logger LOG = LoggerFactory.getLogger(NameNodeBackupRPCImpl.class);
 
   private final NameNodeRestoreProcessor restoreProcessor;
   private final BlockManager blockManager;
@@ -41,9 +45,13 @@ public class NameNodeBackupRPCImpl implements NameNodeBackupRPC {
     Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager()
                                                     .getDatanodes();
     for (DatanodeInfo datanodeInfo : datanodes) {
-      DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeInfo, conf);
-      stats.add(backup.getBackupStats());
-      stats.add(backup.getRestoreStats());
+      try {
+        DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeInfo, conf);
+        stats.add(backup.getBackupStats());
+        stats.add(backup.getRestoreStats());
+      } catch (Exception e) {
+        LOG.error("Error while trying to read hdfs backup stats from datanode {}", datanodeInfo.getHostName());
+      }
     }
     return stats;
   }

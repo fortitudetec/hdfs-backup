@@ -24,10 +24,10 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -60,11 +60,12 @@ public class DataNodeRestoreProcessor implements Closeable {
   private final BackupStore backupStore;
   private final int bytesPerChecksum;
   private final Type checksumType;
-  private final BlockingQueue<ExtendedBlock> restoreBlocks = new LinkedBlockingQueue<>();
+  private final BlockingQueue<ExtendedBlock> restoreBlocks;
   private final ExecutorService executorService;
   private final Closer closer;
   private final AtomicBoolean running = new AtomicBoolean(true);
   private final AtomicInteger restoreInProgress = new AtomicInteger();
+  private final Meter bytesPerSecond = new Meter();
 
   public DataNodeRestoreProcessor(Configuration conf, DataNode datanode) throws Exception {
     this.closer = Closer.create();
@@ -78,6 +79,7 @@ public class DataNodeRestoreProcessor implements Closeable {
     long pauseOnError = conf.getLong(DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_KEY,
         DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_DEFAULT);
     backupStore = closer.register(BackupStore.create(BackupUtil.convert(conf)));
+    restoreBlocks = new ArrayBlockingQueue<>(threads);
     executorService = Executors.newCachedThreadPool();
     closer.register((Closeable) () -> executorService.shutdownNow());
     for (int t = 0; t < threads; t++) {
@@ -89,6 +91,7 @@ public class DataNodeRestoreProcessor implements Closeable {
     RestoreStats restoreStats = new RestoreStats();
     restoreStats.setRestoreBlocks(restoreBlocks.size());
     restoreStats.setRestoresInProgressCount(restoreInProgress.get());
+    restoreStats.setRestoreBytesPerSecond(bytesPerSecond.getCountPerSecond());
     return restoreStats;
   }
 
@@ -98,9 +101,9 @@ public class DataNodeRestoreProcessor implements Closeable {
     IOUtils.closeQuietly(closer);
   }
 
-  public void addToRestoreQueue(ExtendedBlock extendedBlock) throws IOException {
+  public boolean addToRestoreQueue(ExtendedBlock extendedBlock) throws IOException {
     try {
-      restoreBlocks.put(extendedBlock);
+      return restoreBlocks.offer(extendedBlock);
     } catch (Exception e) {
       throw new IOException(e);
     }
@@ -145,13 +148,13 @@ public class DataNodeRestoreProcessor implements Closeable {
         try (OutputStream checksumOut = streams.getChecksumOut()) {
           try (InputStream metaData = backupStore.getMetaDataInputStream(extendedBlock)) {
             LOG.info("Restoring meta data for block {}", extendedBlock);
-            IOUtils.copy(metaData, checksumOut);
+            IOUtils.copy(trackThroughPut(metaData), checksumOut);
           }
         }
         try (OutputStream dataOut = streams.getDataOut()) {
           try (InputStream data = backupStore.getDataInputStream(extendedBlock)) {
             LOG.info("Restoring data for block {}", extendedBlock);
-            bytesCopied = IOUtils.copy(data, dataOut);
+            bytesCopied = IOUtils.copy(trackThroughPut(data), dataOut);
           }
         }
       }
@@ -168,4 +171,12 @@ public class DataNodeRestoreProcessor implements Closeable {
     }
   }
 
+  private InputStream trackThroughPut(InputStream input) {
+    return new ThroughPutInputStream(input, bytesPerSecond.getCounter());
+  }
+
+  public boolean isRestoringBlock(String poolId, long blockId, long length, long generationStamp) {
+    ExtendedBlock block = new ExtendedBlock(poolId, blockId, length, generationStamp);
+    return restoreBlocks.contains(block);
+  }
 }

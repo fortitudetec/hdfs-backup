@@ -308,6 +308,7 @@ public abstract class MiniClusterTestBase {
 
     conf.setInt(BackupConstants.DFS_BACKUP_DATANODE_RPC_PORT_KEY, 0);
     conf.setInt(BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_KEY, 0);
+    conf.setInt(BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_KEY, 0);
     conf.set(BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY, zkConnection);
 
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 2);// 3
