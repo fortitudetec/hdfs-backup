@@ -15,6 +15,9 @@
  */
 package backup.namenode.ipc;
 
+import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT;
+import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_KEY;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
@@ -25,8 +28,21 @@ import org.apache.hadoop.ipc.RPC;
 @ProtocolInfo(protocolName = "NameNodeBackupRPC", protocolVersion = 1)
 public interface NameNodeBackupRPC {
 
-  public static NameNodeBackupRPC getDataNodeBackupRPC(InetSocketAddress nameNodeAddress, Configuration conf)
+  public static NameNodeBackupRPC getNameNodeBackupRPC(String host, Configuration conf) throws IOException {
+    int port = conf.getInt(DFS_BACKUP_NAMENODE_RPC_PORT_KEY, DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT);
+    if (port == 0) {
+      throw new RuntimeException("Can not determine port.");
+    }
+    return RPC.getProxy(NameNodeBackupRPC.class, RPC.getProtocolVersion(NameNodeBackupRPC.class),
+        new InetSocketAddress(host, port), conf);
+  }
+
+  public static NameNodeBackupRPC getNameNodeBackupRPC(InetSocketAddress nameNodeAddress, Configuration conf)
       throws IOException {
+    int port = conf.getInt(DFS_BACKUP_NAMENODE_RPC_PORT_KEY, DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT);
+    if (port == 0) {
+      port = nameNodeAddress.getPort() + 1;
+    }
     return RPC.getProxy(NameNodeBackupRPC.class, RPC.getProtocolVersion(NameNodeBackupRPC.class), nameNodeAddress,
         conf);
   }

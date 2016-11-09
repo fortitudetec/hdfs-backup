@@ -67,13 +67,13 @@ public class DataNodeBackupServicePlugin extends Configured implements ServicePl
       if (port == 0) {
         port = ipcPort + 1;
       }
-      LOG.info("DataNode Backup RPC listening on {}", port);
       server = new RPC.Builder(conf).setBindAddress(bindAddress)
                                     .setPort(port)
                                     .setInstance(backupRPCImpl)
                                     .setProtocol(DataNodeBackupRPC.class)
                                     .build();
       server.start();
+      LOG.info("DataNode Backup RPC listening on {}", port);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

@@ -86,4 +86,11 @@ public class Stats implements Writable {
     this.restoresInProgressCount = restoresInProgressCount;
   }
 
+  @Override
+  public String toString() {
+    return "Stats [finializedBlocksSizeCount=" + finializedBlocksSizeCount + ", futureChecksSizeCount="
+        + futureChecksSizeCount + ", backupsInProgressCount=" + backupsInProgressCount + ", restoreBlocks="
+        + restoreBlocks + ", restoresInProgressCount=" + restoresInProgressCount + "]";
+  }
+
 }

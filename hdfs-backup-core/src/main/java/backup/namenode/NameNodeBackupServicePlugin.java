@@ -28,6 +28,8 @@ import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.Server;
 import org.apache.hadoop.ipc.WritableRpcEngine;
 import org.apache.hadoop.util.ServicePlugin;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import backup.SingletonManager;
 import backup.datanode.ipc.DataNodeBackupRPC;
@@ -36,6 +38,8 @@ import backup.namenode.ipc.NameNodeBackupRPCImpl;
 
 public class NameNodeBackupServicePlugin extends Configured implements ServicePlugin {
 
+  private final static Logger LOG = LoggerFactory.getLogger(NameNodeBackupServicePlugin.class);
+  
   private NameNodeRestoreProcessor restoreProcessor;
   private Server server;
 
@@ -58,7 +62,6 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       if (port == 0) {
         port = ipcPort + 1;
       }
-
       NameNodeBackupRPC nodeBackupRPCImpl = new NameNodeBackupRPCImpl(getConf(), namenode, restoreProcessor);
 
       server = new RPC.Builder(getConf()).setBindAddress(bindAddress)
@@ -67,6 +70,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
                                          .setProtocol(NameNodeBackupRPC.class)
                                          .build();
       server.start();
+      LOG.info("NameNode Backup RPC listening on {}", port);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

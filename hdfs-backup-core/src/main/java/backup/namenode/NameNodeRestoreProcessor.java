@@ -42,7 +42,6 @@ import backup.BaseProcessor;
 import backup.datanode.ipc.DataNodeBackupRPC;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
-import software.amazon.ion.IonException;
 
 public class NameNodeRestoreProcessor extends BaseProcessor {
 
@@ -129,7 +128,7 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     try {
       requestRestore(new ExtendedBlock(poolId, blockId, length, generationStamp));
     } catch (Exception e) {
-      throw new IonException(e);
+      throw new IOException(e);
     }
   }
 
