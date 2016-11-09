@@ -48,18 +48,16 @@ import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.ipc.RPC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import backup.BaseProcessor;
-import backup.datanode.DataNodeBackupRPC;
+import backup.datanode.ipc.DataNodeBackupRPC;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
 import backup.store.ExternalExtendedBlockSort;
-import backup.store.WritableExtendedBlock;
 
 public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
@@ -226,9 +224,11 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private void writeBackupRequests(List<ExtendedBlockWithAddress> batch) throws Exception {
     for (ExtendedBlockWithAddress extendedBlockWithAddress : batch) {
       LOG.info("Backup block request {}", extendedBlockWithAddress.getExtendedBlock());
-      DataNodeBackupRPC backup = RPC.getProxy(DataNodeBackupRPC.class, RPC.getProtocolVersion(DataNodeBackupRPC.class),
-          chooseOneAtRandom(extendedBlockWithAddress.getAddresses()), conf);
-      backup.backupBlock(new WritableExtendedBlock(extendedBlockWithAddress.getExtendedBlock()));
+      InetSocketAddress dataNodeAddress = chooseOneAtRandom(extendedBlockWithAddress.getAddresses());
+      DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(dataNodeAddress, conf);
+      ExtendedBlock extendedBlock = extendedBlockWithAddress.getExtendedBlock();
+      backup.backupBlock(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
+          extendedBlock.getGenerationStamp());
     }
 
   }
@@ -261,7 +261,9 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     DFSClient client = fileSystem.getClient();
     while (iterator.hasNext()) {
       FileStatus fs = iterator.next();
-      String src = fs.getPath().toUri().getPath();
+      String src = fs.getPath()
+                     .toUri()
+                     .getPath();
       long start = 0;
       long length = fs.getLen();
       LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);

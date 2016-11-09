@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -46,10 +47,10 @@ import org.slf4j.LoggerFactory;
 import com.google.common.io.Closer;
 
 import backup.Executable;
+import backup.datanode.ipc.RestoreStats;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
-import backup.store.WritableExtendedBlock;
 
 public class DataNodeRestoreProcessor implements Closeable {
 
@@ -63,14 +64,15 @@ public class DataNodeRestoreProcessor implements Closeable {
   private final ExecutorService executorService;
   private final Closer closer;
   private final AtomicBoolean running = new AtomicBoolean(true);
+  private final AtomicInteger restoreInProgress = new AtomicInteger();
 
   public DataNodeRestoreProcessor(Configuration conf, DataNode datanode) throws Exception {
     this.closer = Closer.create();
     this.datanode = datanode;
     this.bytesPerChecksum = conf.getInt(DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_KEY,
         DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_DEFAULT);
-    this.checksumType = Type
-        .valueOf(conf.get(DFSConfigKeys.DFS_CHECKSUM_TYPE_KEY, DFSConfigKeys.DFS_CHECKSUM_TYPE_DEFAULT));
+    this.checksumType = Type.valueOf(
+        conf.get(DFSConfigKeys.DFS_CHECKSUM_TYPE_KEY, DFSConfigKeys.DFS_CHECKSUM_TYPE_DEFAULT));
     int threads = conf.getInt(DFS_BACKUP_DATANODE_RESTORE_BLOCK_HANDLER_COUNT_KEY,
         DFS_BACKUP_DATANODE_RESTORE_BLOCK_HANDLER_COUNT_DEFAULT);
     long pauseOnError = conf.getLong(DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_KEY,
@@ -83,15 +85,22 @@ public class DataNodeRestoreProcessor implements Closeable {
     }
   }
 
+  public RestoreStats getRestoreStats() {
+    RestoreStats restoreStats = new RestoreStats();
+    restoreStats.setRestoreBlocks(restoreBlocks.size());
+    restoreStats.setRestoresInProgressCount(restoreInProgress.get());
+    return restoreStats;
+  }
+
   @Override
   public void close() throws IOException {
     running.set(false);
     IOUtils.closeQuietly(closer);
   }
 
-  public void addToRestoreQueue(WritableExtendedBlock extendedBlock) throws IOException {
+  public void addToRestoreQueue(ExtendedBlock extendedBlock) throws IOException {
     try {
-      restoreBlocks.put(extendedBlock.getExtendedBlock());
+      restoreBlocks.put(extendedBlock);
     } catch (Exception e) {
       throw new IOException(e);
     }
@@ -120,38 +129,43 @@ public class DataNodeRestoreProcessor implements Closeable {
       LOG.info("Block already restored {}", extendedBlock);
       return;
     }
-    LOG.info("Restoring block {}", extendedBlock);
-    boolean allowLazyPersist = true;
-    // org.apache.hadoop.fs.StorageType storageType =
-    // org.apache.hadoop.fs.StorageType.DEFAULT;
-    org.apache.hadoop.hdfs.StorageType storageType = org.apache.hadoop.hdfs.StorageType.DEFAULT;
-    ReplicaHandler replicaHandler = fsDataset.createRbw(storageType, heb, allowLazyPersist);
-    ReplicaInPipelineInterface pipelineInterface = replicaHandler.getReplica();
-    boolean isCreate = true;
-    DataChecksum requestedChecksum = DataChecksum.newDataChecksum(checksumType, bytesPerChecksum);
-    int bytesCopied = 0;
-    try (ReplicaOutputStreams streams = pipelineInterface.createStreams(isCreate, requestedChecksum)) {
-      try (OutputStream checksumOut = streams.getChecksumOut()) {
-        try (InputStream metaData = backupStore.getMetaDataInputStream(extendedBlock)) {
-          LOG.info("Restoring meta data for block {}", extendedBlock);
-          IOUtils.copy(metaData, checksumOut);
+    try {
+      restoreInProgress.incrementAndGet();
+      LOG.info("Restoring block {}", extendedBlock);
+      boolean allowLazyPersist = true;
+      // org.apache.hadoop.fs.StorageType storageType =
+      // org.apache.hadoop.fs.StorageType.DEFAULT;
+      org.apache.hadoop.hdfs.StorageType storageType = org.apache.hadoop.hdfs.StorageType.DEFAULT;
+      ReplicaHandler replicaHandler = fsDataset.createRbw(storageType, heb, allowLazyPersist);
+      ReplicaInPipelineInterface pipelineInterface = replicaHandler.getReplica();
+      boolean isCreate = true;
+      DataChecksum requestedChecksum = DataChecksum.newDataChecksum(checksumType, bytesPerChecksum);
+      int bytesCopied = 0;
+      try (ReplicaOutputStreams streams = pipelineInterface.createStreams(isCreate, requestedChecksum)) {
+        try (OutputStream checksumOut = streams.getChecksumOut()) {
+          try (InputStream metaData = backupStore.getMetaDataInputStream(extendedBlock)) {
+            LOG.info("Restoring meta data for block {}", extendedBlock);
+            IOUtils.copy(metaData, checksumOut);
+          }
+        }
+        try (OutputStream dataOut = streams.getDataOut()) {
+          try (InputStream data = backupStore.getDataInputStream(extendedBlock)) {
+            LOG.info("Restoring data for block {}", extendedBlock);
+            bytesCopied = IOUtils.copy(data, dataOut);
+          }
         }
       }
-      try (OutputStream dataOut = streams.getDataOut()) {
-        try (InputStream data = backupStore.getDataInputStream(extendedBlock)) {
-          LOG.info("Restoring data for block {}", extendedBlock);
-          bytesCopied = IOUtils.copy(data, dataOut);
-        }
-      }
-    }
-    pipelineInterface.setNumBytes(bytesCopied);
-    LOG.info("Finalizing restored block {}", extendedBlock);
-    fsDataset.finalizeBlock(heb);
+      pipelineInterface.setNumBytes(bytesCopied);
+      LOG.info("Finalizing restored block {}", extendedBlock);
+      fsDataset.finalizeBlock(heb);
 
-    // datanode.notifyNamenodeReceivedBlock(extendedBlock, "",
-    // pipelineInterface.getStorageUuid();
-    datanode.notifyNamenodeReceivedBlock(heb, "", pipelineInterface.getStorageUuid(),
-        pipelineInterface.isOnTransientStorage());
+      // datanode.notifyNamenodeReceivedBlock(extendedBlock, "",
+      // pipelineInterface.getStorageUuid();
+      datanode.notifyNamenodeReceivedBlock(heb, "", pipelineInterface.getStorageUuid(),
+          pipelineInterface.isOnTransientStorage());
+    } finally {
+      restoreInProgress.decrementAndGet();
+    }
   }
 
 }

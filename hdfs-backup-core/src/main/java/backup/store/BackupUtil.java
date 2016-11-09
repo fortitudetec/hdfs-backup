@@ -84,7 +84,7 @@ public class BackupUtil {
     return new ExtendedBlock(block.getBlockPoolId(), block.getBlockId(), block.getNumBytes(),
         block.getGenerationStamp());
   }
-  
+
   public static String readShortString(DataInput in) throws IOException {
     byte[] buf = new byte[in.readShort()];
     in.readFully(buf);

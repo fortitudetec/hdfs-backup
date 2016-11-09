@@ -3,18 +3,26 @@ package backup.store.s3;
 import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_BUCKET_NAME_KEY;
 import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_DEFAULT;
 import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_CREDENTIALS_PROVIDER_FACTORY_KEY;
-import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_ENDPOINT;
+import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_ENDPOINT_KEY;
 import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_LISTING_MAXKEYS_DEFAULT;
 import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_LISTING_MAXKEYS_KEY;
 import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_OBJECT_PREFIX_KEY;
+import static backup.store.s3.S3BackupStoreContants.DFS_BACKUP_S3_REGION_KEY;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.apache.commons.configuration.Configuration;
+import org.apache.commons.configuration.SystemConfiguration;
 
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
@@ -53,6 +61,64 @@ public class S3BackupStore extends BackupStore {
   private AmazonS3Client s3Client;
   private int maxKeys;
 
+  public static void main(String[] args) throws Exception {
+    SystemConfiguration systemConfiguration = new SystemConfiguration();
+    try (S3BackupStore store = new S3BackupStore()) {
+      store.setConf(systemConfiguration);
+      store.init();
+      String poolId = "store-test-" + UUID.randomUUID()
+                                          .toString();
+      long blockId = 0;
+      int length = 100;
+      long generationStamp = 100;
+      ExtendedBlock extendedBlock = new ExtendedBlock(poolId, blockId, length, generationStamp);
+      store.backupBlock(extendedBlock, generate(length), generate(length));
+      if (!store.hasBlock(extendedBlock)) {
+        throw new RuntimeException("Can not read block that was just written.");
+      }
+      try (InputStream data = store.getDataInputStream(extendedBlock)) {
+        validate(data, 100, 0);
+      }
+      try (InputStream meta = store.getMetaDataInputStream(extendedBlock)) {
+        validate(meta, 100, 0);
+      }
+      int count = 0;
+      try (ExtendedBlockEnum<Void> extendedBlocks = store.getExtendedBlocks()) {
+        while (extendedBlocks.next() != null) {
+          count++;
+        }
+      }
+      if (count != 1) {
+        throw new RuntimeException("Wrong number of blocks. " + count);
+      }
+      store.destroyAllBlocks();
+    }
+    System.out.println("Yay! The s3 backup store test seems to work.");
+  }
+
+  private static void validate(InputStream input, int length, int value) throws IOException {
+    int val;
+    int count = 0;
+    while ((val = input.read()) != -1) {
+      if (val != value) {
+        throw new RuntimeException();
+      }
+      count++;
+    }
+    if (count != length) {
+      throw new RuntimeException("Wrong number of bytes [" + count + "] expecting [" + value + "]");
+    }
+  }
+
+  private static LengthInputStream generate(int length) throws IOException {
+    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+      for (long l = 0; l < length; l++) {
+        outputStream.write(0);
+      }
+      return new LengthInputStream(new ByteArrayInputStream(outputStream.toByteArray()), length);
+    }
+  }
+
   @Override
   public void init() throws Exception {
     Configuration conf = getConf();
@@ -67,9 +133,13 @@ public class S3BackupStore extends BackupStore {
     objectPrefix = conf.getString(DFS_BACKUP_S3_OBJECT_PREFIX_KEY);
     maxKeys = conf.getInt(DFS_BACKUP_S3_LISTING_MAXKEYS_KEY, DFS_BACKUP_S3_LISTING_MAXKEYS_DEFAULT);
     s3Client = new AmazonS3Client(credentialsProviderFactory.getCredentials());
-    String endpoint = conf.getString(DFS_BACKUP_S3_ENDPOINT);
+    String endpoint = conf.getString(DFS_BACKUP_S3_ENDPOINT_KEY);
     if (endpoint != null) {
       s3Client.setEndpoint(endpoint);
+    }
+    String region = conf.getString(DFS_BACKUP_S3_REGION_KEY);
+    if (region != null) {
+      s3Client.setRegion(Region.getRegion(Regions.fromName(region)));
     }
   }
 

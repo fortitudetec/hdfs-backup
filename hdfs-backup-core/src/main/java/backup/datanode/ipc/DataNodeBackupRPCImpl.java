@@ -13,11 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package backup.datanode;
+package backup.datanode.ipc;
 
 import java.io.IOException;
 
-import backup.store.WritableExtendedBlock;
+import backup.datanode.DataNodeBackupProcessor;
+import backup.datanode.DataNodeRestoreProcessor;
+import backup.store.ExtendedBlock;
 
 public class DataNodeBackupRPCImpl implements DataNodeBackupRPC {
 
@@ -30,13 +32,23 @@ public class DataNodeBackupRPCImpl implements DataNodeBackupRPC {
   }
 
   @Override
-  public void backupBlock(WritableExtendedBlock extendedBlock) throws IOException {
-    backupProcessor.addToBackupQueue(extendedBlock);
+  public void backupBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
+    backupProcessor.addToBackupQueue(new ExtendedBlock(poolId, blockId, length, generationStamp));
   }
 
   @Override
-  public void restoreBlock(WritableExtendedBlock extendedBlock) throws IOException {
-    restoreProcessor.addToRestoreQueue(extendedBlock);
+  public BackupStats getBackupStats() throws IOException {
+    return backupProcessor.getBackupStats();
+  }
+
+  @Override
+  public void restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
+    restoreProcessor.addToRestoreQueue(new ExtendedBlock(poolId, blockId, length, generationStamp));
+  }
+
+  @Override
+  public RestoreStats getRestoreStats() throws IOException {
+    return restoreProcessor.getRestoreStats();
   }
 
 }

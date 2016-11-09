@@ -37,6 +37,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -49,11 +50,11 @@ import org.slf4j.LoggerFactory;
 import com.google.common.io.Closer;
 
 import backup.Executable;
+import backup.datanode.ipc.BackupStats;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
 import backup.store.LengthInputStream;
-import backup.store.WritableExtendedBlock;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
@@ -74,6 +75,7 @@ public class DataNodeBackupProcessor implements Closeable {
   private final int maxBlocksToCheck = 100;
   private final Closer closer;
   private final AtomicBoolean running = new AtomicBoolean(true);
+  private final AtomicInteger backupsInProgress = new AtomicInteger();
 
   public DataNodeBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
     this.closer = Closer.create();
@@ -92,8 +94,9 @@ public class DataNodeBackupProcessor implements Closeable {
     for (int t = 1; t < threads; t++) {
       executorService.submit(Executable.createDaemon(LOG, pauseOnError, running, () -> backupBlocks()));
     }
-    
-    int zkSessionTimeout = conf.getInt(DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY, DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT);
+
+    int zkSessionTimeout = conf.getInt(DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY,
+        DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT);
     String zkConnectionString = conf.get(DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY);
     if (zkConnectionString == null) {
       throw new RuntimeException("ZooKeeper connection string missing [" + DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY + "].");
@@ -101,6 +104,14 @@ public class DataNodeBackupProcessor implements Closeable {
     zooKeeper = closer.register(ZkUtils.newZooKeeper(zkConnectionString, zkSessionTimeout));
     ZkUtils.mkNodesStr(zooKeeper, ZkUtils.createPath(LOCKS));
     lockManager = closer.register(new ZooKeeperLockManager(zooKeeper, ZkUtils.createPath(LOCKS)));
+  }
+
+  public BackupStats getBackupStats() {
+    BackupStats backupStats = new BackupStats();
+    backupStats.setBackupsInProgressCount(backupsInProgress.get());
+    backupStats.setFinializedBlocksSizeCount(finializedBlocks.size());
+    backupStats.setFutureChecksSizeCount(futureChecks.size());
+    return backupStats;
   }
 
   /**
@@ -143,18 +154,20 @@ public class DataNodeBackupProcessor implements Closeable {
     String blockId = Long.toString(extendedBlock.getBlockId());
     if (lockManager.tryToLock(blockId)) {
       try {
+        backupsInProgress.incrementAndGet();
         FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
         org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
         BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(heb);
         long numBytes = blockLocalPathInfo.getNumBytes();
         try (LengthInputStream data = new LengthInputStream(fsDataset.getBlockInputStream(heb, 0), numBytes)) {
-          org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta = fsDataset
-              .getMetaDataInputStream(heb);
+          org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta = fsDataset.getMetaDataInputStream(
+              heb);
           try (LengthInputStream meta = new LengthInputStream(tmeta, tmeta.getLength())) {
             backupStore.backupBlock(extendedBlock, data, meta);
           }
         }
       } finally {
+        backupsInProgress.decrementAndGet();
         lockManager.unlock(blockId);
       }
     } else {
@@ -198,9 +211,9 @@ public class DataNodeBackupProcessor implements Closeable {
     return backupOccured;
   }
 
-  public void addToBackupQueue(WritableExtendedBlock extendedBlock) throws IOException {
+  public void addToBackupQueue(ExtendedBlock extendedBlock) throws IOException {
     try {
-      finializedBlocks.put(extendedBlock.getExtendedBlock());
+      finializedBlocks.put(extendedBlock);
     } catch (InterruptedException e) {
       LOG.error("error adding new block to internal work queue {}", extendedBlock);
       throw new IOException(e);
@@ -220,4 +233,5 @@ public class DataNodeBackupProcessor implements Closeable {
       return System.currentTimeMillis() >= checkTime;
     }
   }
+
 }

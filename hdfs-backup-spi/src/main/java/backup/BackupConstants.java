@@ -61,4 +61,10 @@ public class BackupConstants {
   public static final int DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_DEFAULT = (int) TimeUnit.HOURS.toMillis(1);
 
   public static final String DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY = "dfs.backup.namenode.local.dir";
+  
+  public static final String DFS_BACKUP_DATANODE_RPC_PORT_KEY = "dfs.backup.datanode.rpc.port";
+  public static final int DFS_BACKUP_DATANODE_RPC_PORT_DEFAULT = 50888;
+  
+  public static final String DFS_BACKUP_NAMENODE_RPC_PORT_KEY = "dfs.backup.namenode.rpc.port";
+  public static final int DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT = 50889;
 }

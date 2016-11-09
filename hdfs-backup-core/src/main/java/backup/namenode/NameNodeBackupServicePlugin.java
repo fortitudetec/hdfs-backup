@@ -15,26 +15,58 @@
  */
 package backup.namenode;
 
+import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT;
+import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_KEY;
+
 import java.io.IOException;
+import java.net.InetSocketAddress;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.apache.hadoop.ipc.RPC;
+import org.apache.hadoop.ipc.RPC.Server;
+import org.apache.hadoop.ipc.WritableRpcEngine;
 import org.apache.hadoop.util.ServicePlugin;
 
 import backup.SingletonManager;
+import backup.datanode.ipc.DataNodeBackupRPC;
+import backup.namenode.ipc.NameNodeBackupRPC;
+import backup.namenode.ipc.NameNodeBackupRPCImpl;
 
 public class NameNodeBackupServicePlugin extends Configured implements ServicePlugin {
 
-  private NameNodeRestoreProcessor backupProcessor;
+  private NameNodeRestoreProcessor restoreProcessor;
+  private Server server;
 
   @Override
   public void start(Object service) {
     NameNode namenode = (NameNode) service;
+    RPC.setProtocolEngine(getConf(), DataNodeBackupRPC.class, WritableRpcEngine.class);
+    RPC.setProtocolEngine(getConf(), NameNodeBackupRPC.class, WritableRpcEngine.class);
     // This object is created here so that it's lifecycle follows the namenode
     try {
-      backupProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class).getInstance(namenode,
-          () -> new NameNodeRestoreProcessor(getConf(), namenode));
+      restoreProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
+                                         .getInstance(namenode,
+                                             () -> new NameNodeRestoreProcessor(getConf(), namenode));
+
+      InetSocketAddress listenerAddress = namenode.getServiceRpcAddress();
+      int ipcPort = listenerAddress.getPort();
+      String bindAddress = listenerAddress.getAddress()
+                                          .getHostAddress();
+      int port = getConf().getInt(DFS_BACKUP_NAMENODE_RPC_PORT_KEY, DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT);
+      if (port == 0) {
+        port = ipcPort + 1;
+      }
+
+      NameNodeBackupRPC nodeBackupRPCImpl = new NameNodeBackupRPCImpl(getConf(), namenode, restoreProcessor);
+
+      server = new RPC.Builder(getConf()).setBindAddress(bindAddress)
+                                         .setPort(port)
+                                         .setInstance(nodeBackupRPCImpl)
+                                         .setProtocol(NameNodeBackupRPC.class)
+                                         .build();
+      server.start();
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -42,7 +74,10 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
 
   @Override
   public void stop() {
-    IOUtils.closeQuietly(backupProcessor);
+    if (server != null) {
+      server.stop();
+    }
+    IOUtils.closeQuietly(restoreProcessor);
   }
 
   @Override

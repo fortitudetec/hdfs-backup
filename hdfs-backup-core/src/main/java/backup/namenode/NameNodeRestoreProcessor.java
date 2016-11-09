@@ -18,7 +18,7 @@ package backup.namenode;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY;
 
-import java.net.InetSocketAddress;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Set;
@@ -32,7 +32,6 @@ import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
-import org.apache.hadoop.ipc.RPC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,10 +39,10 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
 import backup.BaseProcessor;
-import backup.datanode.DataNodeBackupRPC;
+import backup.datanode.ipc.DataNodeBackupRPC;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
-import backup.store.WritableExtendedBlock;
+import software.amazon.ion.IonException;
 
 public class NameNodeRestoreProcessor extends BaseProcessor {
 
@@ -60,7 +59,9 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     this.conf = conf;
     this.namesystem = namenode.getNamesystem();
     this.blockManager = namesystem.getBlockManager();
-    Cache<ExtendedBlock, Boolean> cache = CacheBuilder.newBuilder().expireAfterWrite(1, TimeUnit.MINUTES).build();
+    Cache<ExtendedBlock, Boolean> cache = CacheBuilder.newBuilder()
+                                                      .expireAfterWrite(1, TimeUnit.MINUTES)
+                                                      .build();
     currentRequestedRestore = Collections.newSetFromMap(cache.asMap());
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);
@@ -101,19 +102,19 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
   }
 
   public synchronized void requestRestore(ExtendedBlock extendedBlock) throws Exception {
-    Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager().getDatanodes();
-    DataNodeBackupRPC backup = RPC.getProxy(DataNodeBackupRPC.class, RPC.getProtocolVersion(DataNodeBackupRPC.class),
-        getDataNodeAddress(datanodes), conf);
-    backup.restoreBlock(new WritableExtendedBlock(extendedBlock));
+    Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager()
+                                                    .getDatanodes();
+    DatanodeInfo datanodeInfo = getDataNodeAddress(datanodes);
+    DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeInfo, conf);
+    backup.restoreBlock(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
+        extendedBlock.getGenerationStamp());
     currentRequestedRestore.add(extendedBlock);
   }
 
-  private InetSocketAddress getDataNodeAddress(Set<DatanodeDescriptor> storages) {
+  private DatanodeInfo getDataNodeAddress(Set<DatanodeDescriptor> storages) {
     DatanodeInfo[] datanodeInfos = storages.toArray(new DatanodeInfo[storages.size()]);
-    String[] ipAddrs = BackupUtil.getIpAddrs(datanodeInfos);
-    int[] ipcPorts = BackupUtil.getIpcPorts(datanodeInfos);
-    int index = BackupUtil.nextInt(ipAddrs.length);
-    return new InetSocketAddress(ipAddrs[index], ipcPorts[index]);
+    int index = BackupUtil.nextInt(datanodeInfos.length);
+    return datanodeInfos[index];
   }
 
   private boolean hasRestoreBeenRequested(ExtendedBlock extendedBlock) {
@@ -122,6 +123,14 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
 
   public void runBlockCheck() throws Exception {
     this.blockCheck.runBlockCheck();
+  }
+
+  public void restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
+    try {
+      requestRestore(new ExtendedBlock(poolId, blockId, length, generationStamp));
+    } catch (Exception e) {
+      throw new IonException(e);
+    }
   }
 
 }
