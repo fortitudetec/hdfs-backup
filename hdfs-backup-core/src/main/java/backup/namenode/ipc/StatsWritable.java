@@ -8,13 +8,14 @@ import org.apache.hadoop.io.Writable;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import backup.api.Stats;
 import backup.datanode.ipc.BackupStats;
 import backup.datanode.ipc.RestoreStats;
 
-public class Stats implements Writable {
+public class StatsWritable implements Writable, Stats {
 
   @JsonProperty
-  private int finializedBlocksSizeCount;
+  private int finalizedBlocksSizeCount;
   @JsonProperty
   private int futureChecksSizeCount;
   @JsonProperty
@@ -30,7 +31,7 @@ public class Stats implements Writable {
 
   @Override
   public void write(DataOutput out) throws IOException {
-    out.writeInt(finializedBlocksSizeCount);
+    out.writeInt(finalizedBlocksSizeCount);
     out.writeInt(futureChecksSizeCount);
     out.writeInt(backupsInProgressCount);
     out.writeDouble(backupBytesPerSecond);
@@ -41,7 +42,7 @@ public class Stats implements Writable {
 
   @Override
   public void readFields(DataInput in) throws IOException {
-    finializedBlocksSizeCount = in.readInt();
+    finalizedBlocksSizeCount = in.readInt();
     futureChecksSizeCount = in.readInt();
     backupsInProgressCount = in.readInt();
     backupBytesPerSecond = in.readDouble();
@@ -51,7 +52,7 @@ public class Stats implements Writable {
   }
 
   public void add(BackupStats backupStats) {
-    finializedBlocksSizeCount += backupStats.getFinializedBlocksSizeCount();
+    finalizedBlocksSizeCount += backupStats.getFinializedBlocksSizeCount();
     futureChecksSizeCount += backupStats.getFutureChecksSizeCount();
     backupsInProgressCount += backupStats.getBackupsInProgressCount();
     backupBytesPerSecond += backupStats.getBackupBytesPerSecond();
@@ -63,14 +64,16 @@ public class Stats implements Writable {
     restoreBytesPerSecond += restoreStats.getRestoreBytesPerSecond();
   }
 
-  public int getFinializedBlocksSizeCount() {
-    return finializedBlocksSizeCount;
+  @Override
+  public int getFinalizedBlocksSizeCount() {
+    return finalizedBlocksSizeCount;
   }
 
-  public void setFinializedBlocksSizeCount(int finializedBlocksSizeCount) {
-    this.finializedBlocksSizeCount = finializedBlocksSizeCount;
+  public void setFinalizedBlocksSizeCount(int finalizedBlocksSizeCount) {
+    this.finalizedBlocksSizeCount = finalizedBlocksSizeCount;
   }
 
+  @Override
   public int getFutureChecksSizeCount() {
     return futureChecksSizeCount;
   }
@@ -79,6 +82,7 @@ public class Stats implements Writable {
     this.futureChecksSizeCount = futureChecksSizeCount;
   }
 
+  @Override
   public int getBackupsInProgressCount() {
     return backupsInProgressCount;
   }
@@ -87,6 +91,7 @@ public class Stats implements Writable {
     this.backupsInProgressCount = backupsInProgressCount;
   }
 
+  @Override
   public int getRestoreBlocks() {
     return restoreBlocks;
   }
@@ -95,6 +100,7 @@ public class Stats implements Writable {
     this.restoreBlocks = restoreBlocks;
   }
 
+  @Override
   public int getRestoresInProgressCount() {
     return restoresInProgressCount;
   }
@@ -103,6 +109,7 @@ public class Stats implements Writable {
     this.restoresInProgressCount = restoresInProgressCount;
   }
 
+  @Override
   public double getBackupBytesPerSecond() {
     return backupBytesPerSecond;
   }
@@ -111,6 +118,7 @@ public class Stats implements Writable {
     this.backupBytesPerSecond = backupBytesPerSecond;
   }
 
+  @Override
   public double getRestoreBytesPerSecond() {
     return restoreBytesPerSecond;
   }
@@ -121,7 +129,7 @@ public class Stats implements Writable {
 
   @Override
   public String toString() {
-    return "Stats [finializedBlocksSizeCount=" + finializedBlocksSizeCount + ", futureChecksSizeCount="
+    return "Stats [finializedBlocksSizeCount=" + finalizedBlocksSizeCount + ", futureChecksSizeCount="
         + futureChecksSizeCount + ", backupsInProgressCount=" + backupsInProgressCount + ", backupBytesPerSecond="
         + backupBytesPerSecond + ", restoreBlocks=" + restoreBlocks + ", restoresInProgressCount="
         + restoresInProgressCount + ", restoreBytesPerSecond=" + restoreBytesPerSecond + "]";

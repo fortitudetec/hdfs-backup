@@ -9,49 +9,37 @@
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 	<groupId>hdfs-backup</groupId>
-	<artifactId>hdfs-backup-core</artifactId>
+	<artifactId>hdfs-backup-status</artifactId>
 	<packaging>jar</packaging>
-
-	<properties>
-		<parcel.name>HDFS_BACKUP</parcel.name>
-	</properties>
 
 	<dependencies>
 		<dependency>
+			<groupId>com.sparkjava</groupId>
+			<artifactId>spark-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.sparkjava</groupId>
+			<artifactId>spark-template-freemarker</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-annotations</artifactId>
+		</dependency>
+
+		<dependency>
 			<groupId>hdfs-backup</groupId>
 			<artifactId>hdfs-backup-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>hdfs-backup</groupId>
-			<artifactId>hdfs-backup-spi</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>hdfs-backup</groupId>
-			<artifactId>hdfs-backup-common</artifactId>
-		</dependency>
-		<!-- Provided -->
-		<dependency>
-			<groupId>org.apache.hadoop</groupId>
-			<artifactId>hadoop-client</artifactId>
 			<scope>provided</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.apache.hadoop</groupId>
-			<artifactId>hadoop-common</artifactId>
-			<scope>provided</scope>
-		</dependency>
-		<!-- Test -->
-		<dependency>
-			<groupId>org.apache.hadoop</groupId>
-			<artifactId>hadoop-minicluster</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>hdfs-backup</groupId>
-			<artifactId>hdfs-backup-spi</artifactId>
-			<type>test-jar</type>
-			<scope>test</scope>
-		</dependency>
+
 	</dependencies>
 
 	<build>
@@ -78,11 +66,8 @@
 						</goals>
 						<configuration>
 							<descriptors>
-								<descriptor>${parcel.assembly.file}</descriptor>
+								<descriptor>src/assemble/zip.xml</descriptor>
 							</descriptors>
-							<finalName>${parcel.name}-${parcel.version}</finalName>
-							<appendAssemblyId>false</appendAssemblyId>
-							<ignoreDirFormatExtensions>false</ignoreDirFormatExtensions>
 						</configuration>
 					</execution>
 				</executions>

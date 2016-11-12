@@ -15,12 +15,15 @@
 	</properties>
 
 	<modules>
+	  <module>hdfs-backup-status</module>
 		<module>hdfs-backup-common</module>
 		<module>hdfs-backup-spi</module>
 		<module>hdfs-backup-core</module>
 		<module>hdfs-backup-test</module>
+		<module>hdfs-backup-api</module>
 		<module>local-backup</module>
 		<module>s3-backup</module>
+		<module>classloader-util</module>
 	</modules>
 
 	<repositories>
@@ -44,6 +47,16 @@
 			</dependency>
 			<dependency>
 				<groupId>hdfs-backup</groupId>
+				<artifactId>classloader-util</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
+				<artifactId>hdfs-backup-status</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
 				<artifactId>hdfs-backup-common</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -55,6 +68,11 @@
 			<dependency>
 				<groupId>hdfs-backup</groupId>
 				<artifactId>hdfs-backup-test</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>hdfs-backup</groupId>
+				<artifactId>hdfs-backup-api</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
@@ -106,6 +124,19 @@
 				<artifactId>s3-backup-store-test</artifactId>
 				<version>${project.version}</version>
 			</dependency>
+
+			<dependency>
+				<groupId>com.sparkjava</groupId>
+				<artifactId>spark-core</artifactId>
+				<version>2.5.2</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.sparkjava</groupId>
+				<artifactId>spark-template-freemarker</artifactId>
+				<version>2.3</version>
+			</dependency>
+
 			<dependency>
 				<groupId>org.apache.hadoop</groupId>
 				<artifactId>hadoop-client</artifactId>
@@ -117,14 +148,57 @@
 				<version>${hadoop.version}</version>
 			</dependency>
 			<dependency>
+				<groupId>org.apache.hadoop</groupId>
+				<artifactId>hadoop-common</artifactId>
+				<version>${hadoop.version}</version>
+			</dependency>
+			<dependency>
 				<groupId>com.amazonaws</groupId>
 				<artifactId>aws-java-sdk-s3</artifactId>
 				<version>1.11.49</version>
 			</dependency>
+
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-api</artifactId>
+				<version>1.7.21</version>
+			</dependency>
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-log4j12</artifactId>
+				<version>1.7.21</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.fasterxml.jackson.core</groupId>
+				<artifactId>jackson-databind</artifactId>
+				<version>2.8.4</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson.core</groupId>
+				<artifactId>jackson-core</artifactId>
+				<version>2.8.4</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson.core</groupId>
+				<artifactId>jackson-annotations</artifactId>
+				<version>2.8.4</version>
+			</dependency>
+
 		</dependencies>
 	</dependencyManagement>
 
 	<dependencies>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+			<scope>provided</scope>
+		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
 		  <artifactId>junit</artifactId>

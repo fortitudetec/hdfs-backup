@@ -40,8 +40,8 @@ public class NameNodeBackupRPCImpl implements NameNodeBackupRPC {
   }
 
   @Override
-  public Stats getStats() throws IOException {
-    Stats stats = new Stats();
+  public StatsWritable getStats() throws IOException {
+    StatsWritable stats = new StatsWritable();
     Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager()
                                                     .getDatanodes();
     for (DatanodeInfo datanodeInfo : datanodes) {

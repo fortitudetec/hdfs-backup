@@ -25,8 +25,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.ipc.ProtocolInfo;
 import org.apache.hadoop.ipc.RPC;
 
+import backup.api.StatsService;
+
 @ProtocolInfo(protocolName = "NameNodeBackupRPC", protocolVersion = 1)
-public interface NameNodeBackupRPC {
+public interface NameNodeBackupRPC extends StatsService<StatsWritable> {
 
   public static NameNodeBackupRPC getNameNodeBackupRPC(String host, Configuration conf) throws IOException {
     int port = conf.getInt(DFS_BACKUP_NAMENODE_RPC_PORT_KEY, DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT);
@@ -50,7 +52,5 @@ public interface NameNodeBackupRPC {
   void backupBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
 
   void restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
-
-  Stats getStats() throws IOException;
 
 }

@@ -1,8 +1,6 @@
 package backup.store;
 
 import java.io.File;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -15,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.MapMaker;
+
+import classloader.FileClassLoader;
 
 public class BackupStoreClassHelper {
 
@@ -86,52 +86,7 @@ public class BackupStoreClassHelper {
 
   private static ClassLoader newClassLoader(File pluginDir) throws Exception {
     LOG.info("loading new plugin {}", pluginDir);
-    List<URL> urls = new ArrayList<>();
-    for (File file : pluginDir.listFiles()) {
-      urls.add(file.toURI().toURL());
-    }
-    return new BackupStoreClassLoader(urls.toArray(new URL[] {}));
+    return new FileClassLoader(pluginDir);
   }
 
-  private static class BackupStoreClassLoader extends URLClassLoader {
-
-    public BackupStoreClassLoader(URL[] urls) {
-      super(urls);
-    }
-
-    public Class<?> loadClass(String name) throws ClassNotFoundException {
-      return loadClass(name, false);
-    }
-
-    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-      Class<?> clazz = findLoadedClass(name);
-      if (clazz == null) {
-        try {
-          clazz = findClass(name);
-        } catch (ClassNotFoundException cnfe) {
-          // do nothing
-        }
-      }
-      if (clazz == null) {
-        ClassLoader parent = getParent();
-        if (parent != null) {
-          clazz = parent.loadClass(name);
-        } else {
-          clazz = getSystemClassLoader().loadClass(name);
-        }
-      }
-      if (resolve) {
-        resolveClass(clazz);
-      }
-      return clazz;
-    }
-
-    public URL getResource(String name) {
-      URL url = findResource(name);
-      if (url == null) {
-        url = getParent().getResource(name);
-      }
-      return url;
-    }
-  }
 }
