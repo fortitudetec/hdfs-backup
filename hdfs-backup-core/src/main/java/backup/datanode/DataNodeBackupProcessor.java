@@ -37,6 +37,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -44,6 +45,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
+import org.apache.hadoop.hdfs.server.datanode.ReplicaNotFoundException;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,7 +145,11 @@ public class DataNodeBackupProcessor implements Closeable {
     try {
       backupBlock(extendedBlock);
     } catch (Exception e) {
-      LOG.error("Unknown error", e);
+      if (e instanceof ReplicaNotFoundException) {
+        Thread.sleep(TimeUnit.SECONDS.toMillis(1));
+      } else {
+        LOG.error("Unknown error", e);
+      }
       // try again
       finializedBlocks.put(extendedBlock);
     }
@@ -160,6 +166,7 @@ public class DataNodeBackupProcessor implements Closeable {
         backupsInProgress.incrementAndGet();
         FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
         org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
+
         BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(heb);
         long numBytes = blockLocalPathInfo.getNumBytes();
         try (LengthInputStream data = new LengthInputStream(trackThroughPut(fsDataset.getBlockInputStream(heb, 0)),
