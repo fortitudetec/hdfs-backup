@@ -44,6 +44,7 @@ import org.apache.hadoop.util.ServicePlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Splitter;
 import com.google.common.io.Closer;
 
 import backup.SingletonManager;
@@ -58,13 +59,14 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
 
   private final static Logger LOG = LoggerFactory.getLogger(NameNodeBackupServicePlugin.class);
 
+  private static final String JAVA_CLASS_PATH = "java.class.path";
   private static final String HDFS_BACKUP_STATUS = "hdfs-backup-status";
   private static final String TMP = "tmp-";
   private static final String JAVA_IO_TMPDIR = "java.io.tmpdir";
-  private static final String HDFS_BACKUP_STATUS_RESOURCES_ZIP = "/hdfs-backup-status-resources.zip";
+  private static final String HDFS_BACKUP_STATUS_RESOURCES_ZIP = "hdfs-backup-status-resources.zip";
   private static final String BACKUP_STATUS_BACKUP_STATUS_SERVER = "backup.status.BackupStatusServer";
-  private static final String HDFS_BACKUP_STATUS_DIR_PROP = "hdfs.backup.status.dir";
-  private static final String HDFS_BACKUP_STATUS_DIR_ENV = "HDFS_BACKUP_STATUS_DIR";
+  private static final String HDFS_BACKUP_STATUS_RESOURCES_ZIP_PROP = "hdfs.backup.status.zip";
+  private static final String HDFS_BACKUP_STATUS_RESOURCES_ZIP_ENV = "HDFS_BACKUP_STATUS_ZIP";
 
   private NameNodeRestoreProcessor restoreProcessor;
   private Server server;
@@ -77,20 +79,25 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     RPC.setProtocolEngine(getConf(), NameNodeBackupRPC.class, WritableRpcEngine.class);
     // This object is created here so that it's lifecycle follows the namenode
     try {
-      restoreProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class).getInstance(namenode,
-          () -> new NameNodeRestoreProcessor(getConf(), namenode));
+      restoreProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
+                                         .getInstance(namenode,
+                                             () -> new NameNodeRestoreProcessor(getConf(), namenode));
 
       InetSocketAddress listenerAddress = namenode.getServiceRpcAddress();
       int ipcPort = listenerAddress.getPort();
-      String bindAddress = listenerAddress.getAddress().getHostAddress();
+      String bindAddress = listenerAddress.getAddress()
+                                          .getHostAddress();
       int port = getConf().getInt(DFS_BACKUP_NAMENODE_RPC_PORT_KEY, DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT);
       if (port == 0) {
         port = ipcPort + 1;
       }
       NameNodeBackupRPC nodeBackupRPCImpl = new NameNodeBackupRPCImpl(getConf(), namenode, restoreProcessor);
 
-      server = new RPC.Builder(getConf()).setBindAddress(bindAddress).setPort(port).setInstance(nodeBackupRPCImpl)
-          .setProtocol(NameNodeBackupRPC.class).build();
+      server = new RPC.Builder(getConf()).setBindAddress(bindAddress)
+                                         .setPort(port)
+                                         .setInstance(nodeBackupRPCImpl)
+                                         .setProtocol(NameNodeBackupRPC.class)
+                                         .build();
       server.start();
       LOG.info("NameNode Backup RPC listening on {}", port);
 
@@ -98,11 +105,13 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       if (httpPort != 0) {
         ClassLoader classLoader = getClassLoader();
         if (classLoader != null) {
-          ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+          ClassLoader contextClassLoader = Thread.currentThread()
+                                                 .getContextClassLoader();
           try {
             // Have to setup classloader in thread context to get the static
             // files in the http server tp be setup correctly.
-            Thread.currentThread().setContextClassLoader(classLoader);
+            Thread.currentThread()
+                  .setContextClassLoader(classLoader);
             Class<?> backupStatusServerClass = classLoader.loadClass(BACKUP_STATUS_BACKUP_STATUS_SERVER);
             Object server = DuckTypeUtil.newInstance(backupStatusServerClass,
                 new Class[] { Integer.TYPE, StatsService.class }, new Object[] { httpPort, nodeBackupRPCImpl });
@@ -110,7 +119,8 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
             httpServer.start();
             LOG.info("NameNode Backup HTTP listening on {}", httpPort);
           } finally {
-            Thread.currentThread().setContextClassLoader(contextClassLoader);
+            Thread.currentThread()
+                  .setContextClassLoader(contextClassLoader);
           }
         } else {
           LOG.info("NameNode Backup HTTP classes not found.");
@@ -145,20 +155,24 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
   }
 
   private ClassLoader getClassLoader() throws Exception {
-    ClassLoader classLoader = getClass().getClassLoader();
     LOG.info("Looking for {} in classpath", HDFS_BACKUP_STATUS_RESOURCES_ZIP);
-    InputStream inputStream = classLoader.getResourceAsStream(HDFS_BACKUP_STATUS_RESOURCES_ZIP);
+    InputStream inputStream = findInClassPath();
     if (inputStream == null) {
-      LOG.info("Checking jvm property {}", HDFS_BACKUP_STATUS_DIR_PROP);
-      String filePath = System.getProperty(HDFS_BACKUP_STATUS_DIR_PROP);
-      if (filePath != null) {
-        inputStream = new FileInputStream(filePath);
-      }
+      ClassLoader classLoader = getClass().getClassLoader();
+      LOG.info("Looking for {} in default classloader", HDFS_BACKUP_STATUS_RESOURCES_ZIP);
+      inputStream = classLoader.getResourceAsStream("/" + HDFS_BACKUP_STATUS_RESOURCES_ZIP);
       if (inputStream == null) {
-        LOG.info("Checking env property {}", HDFS_BACKUP_STATUS_DIR_ENV);
-        filePath = System.getProperty(HDFS_BACKUP_STATUS_DIR_ENV);
+        LOG.info("Checking jvm property {}", HDFS_BACKUP_STATUS_RESOURCES_ZIP_PROP);
+        String filePath = System.getProperty(HDFS_BACKUP_STATUS_RESOURCES_ZIP_PROP);
         if (filePath != null) {
           inputStream = new FileInputStream(filePath);
+        }
+        if (inputStream == null) {
+          LOG.info("Checking env property {}", HDFS_BACKUP_STATUS_RESOURCES_ZIP_ENV);
+          filePath = System.getProperty(HDFS_BACKUP_STATUS_RESOURCES_ZIP_ENV);
+          if (filePath != null) {
+            inputStream = new FileInputStream(filePath);
+          }
         }
       }
     }
@@ -175,12 +189,42 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     }
   }
 
+  private InputStream findInClassPath() throws Exception {
+    String property = System.getProperty(JAVA_CLASS_PATH);
+    for (String f : Splitter.on(File.pathSeparator)
+                            .split(property)) {
+      InputStream inputStream = null;
+      File file = new File(f);
+      if (file.exists()) {
+        inputStream = findInPath(file);
+      } else {
+        inputStream = findInPath(file.getParentFile());
+      }
+      if (inputStream != null) {
+        return inputStream;
+      }
+    }
+    return null;
+  }
+
+  private InputStream findInPath(File file) throws Exception {
+    if (!file.exists()) {
+      return null;
+    }
+    if (!file.isDirectory() && file.getName()
+                                   .equals(HDFS_BACKUP_STATUS_RESOURCES_ZIP)) {
+      return new FileInputStream(file);
+    }
+    return null;
+  }
+
   private static ClassLoader getClassLoader(InputStream zipFileInput) throws IOException, FileNotFoundException {
     File tmpDir = new File(System.getProperty(JAVA_IO_TMPDIR), HDFS_BACKUP_STATUS);
     File dir = new File(tmpDir, TMP + System.nanoTime());
     Closer closer = Closer.create();
     closer.register((Closeable) () -> FileUtils.deleteDirectory(dir));
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> IOUtils.closeQuietly(closer)));
+    Runtime.getRuntime()
+           .addShutdownHook(new Thread(() -> IOUtils.closeQuietly(closer)));
     dir.mkdirs();
 
     List<File> allFiles = new ArrayList<>();
@@ -192,7 +236,8 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
         if (zipEntry.isDirectory()) {
           f.mkdirs();
         } else {
-          f.getParentFile().mkdirs();
+          f.getParentFile()
+           .mkdirs();
           try (FileOutputStream out = new FileOutputStream(f)) {
             IOUtils.copy(zinput, out);
           }
