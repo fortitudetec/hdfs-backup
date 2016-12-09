@@ -56,8 +56,8 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
 
   private void setupBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
     if (backupProcessor == null) {
-      backupProcessor = SingletonManager.getManager(DataNodeBackupProcessor.class).getInstance(datanode,
-          () -> new DataNodeBackupProcessor(conf, datanode));
+      backupProcessor = SingletonManager.getManager(DataNodeBackupProcessor.class)
+                                        .getInstance(datanode, () -> new DataNodeBackupProcessor(conf, datanode));
     }
   }
 
@@ -97,9 +97,11 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
       try {
         Object result = method.invoke(datasetSpi, args);
-        if (method.getName().equals(FINALIZE_BLOCK)) {
+        if (method.getName()
+                  .equals(FINALIZE_BLOCK)) {
           ExtendedBlock extendedBlock = (ExtendedBlock) args[0];
-          backupProcessor.blockFinalized(BackupUtil.fromHadoop(extendedBlock));
+          backup.store.ExtendedBlock eb = BackupUtil.fromHadoop(extendedBlock);
+          backupProcessor.blockFinalized(eb);
         }
         return result;
       } catch (InvocationTargetException e) {

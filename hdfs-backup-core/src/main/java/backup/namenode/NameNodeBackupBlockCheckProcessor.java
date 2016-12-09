@@ -30,7 +30,6 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 
 import org.apache.commons.io.IOUtils;
@@ -68,7 +67,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
   private final NameNodeRestoreProcessor processor;
   private final long checkInterval;
-  private final int initInterval;
+  private final long initInterval;
   private final DistributedFileSystem fileSystem;
   private final Configuration conf;
   private final BackupStore backupStore;
@@ -82,13 +81,13 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     this.batchSize = conf.getInt(DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY, DFS_BACKUP_REMOTE_BACKUP_BATCH_DEFAULT);
     this.checkInterval = conf.getLong(DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_KEY,
         DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DEFAULT);
-    this.initInterval = conf.getInt(DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_KEY,
+    this.initInterval = conf.getLong(DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_KEY,
         DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_DEFAULT);
     start();
   }
 
-  public void runBlockCheck() throws Exception {
-    ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode();
+  public void runBlockCheck(boolean safeModeForce) throws Exception {
+    ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode(safeModeForce);
     ExternalExtendedBlockSort<NullWritable> backupBlocks = fetchBlocksFromBackupStore();
     try {
       nameNodeBlocks.finished();
@@ -253,25 +252,32 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     return backupBlocks;
   }
 
-  private ExternalExtendedBlockSort<Addresses> fetchBlocksFromNameNode() throws Exception {
+  private ExternalExtendedBlockSort<Addresses> fetchBlocksFromNameNode(boolean safeModeForce) throws Exception {
     Path sortDir = getLocalSort(NAMENODE_SORT);
     ExternalExtendedBlockSort<Addresses> nameNodeBlocks = new ExternalExtendedBlockSort<Addresses>(conf, sortDir,
         Addresses.class);
-    RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(new Path("/"), true);
-    DFSClient client = fileSystem.getClient();
-    while (iterator.hasNext()) {
-      FileStatus fs = iterator.next();
-      String src = fs.getPath()
-                     .toUri()
-                     .getPath();
-      long start = 0;
-      long length = fs.getLen();
-      LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
-      for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
-        DatanodeInfo[] locations = locatedBlock.getLocations();
-        ExtendedBlock extendedBlock = BackupUtil.fromHadoop(locatedBlock.getBlock());
-        nameNodeBlocks.add(extendedBlock, new Addresses(locations));
+    try {
+      RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(new Path("/"), true);
+      DFSClient client = fileSystem.getClient();
+      while (iterator.hasNext()) {
+        FileStatus fs = iterator.next();
+        String src = fs.getPath()
+                       .toUri()
+                       .getPath();
+        long start = 0;
+        long length = fs.getLen();
+        LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
+        for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
+          DatanodeInfo[] locations = locatedBlock.getLocations();
+          ExtendedBlock extendedBlock = BackupUtil.fromHadoop(locatedBlock.getBlock());
+          nameNodeBlocks.add(extendedBlock, new Addresses(locations));
+        }
       }
+    } catch (Exception e) {
+      if (safeModeForce) {
+        return nameNodeBlocks;
+      }
+      throw e;
     }
     return nameNodeBlocks;
   }
@@ -286,7 +292,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
   @Override
   protected void initInternal() throws Exception {
-    Thread.sleep(new Random().nextInt(initInterval));
+    Thread.sleep(initInterval);
   }
 
   @Override
@@ -297,7 +303,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   @Override
   protected void runInternal() throws Exception {
     try {
-      runBlockCheck();
+      runBlockCheck(false);
     } catch (Throwable t) {
       LOG.error("Unknown error during block check", t);
       throw t;

@@ -15,6 +15,8 @@
  */
 package backup.namenode;
 
+import static backup.BackupConstants.BACKUP_NAMENODE_SAFEMODE_WAIT_TIME;
+import static backup.BackupConstants.BACKUP_NAMENODE_SAFEMODE_WAIT_TIME_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_KEY;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT;
@@ -45,13 +47,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Splitter;
-import com.google.common.io.Closer;
 
 import backup.SingletonManager;
 import backup.api.StatsService;
 import backup.datanode.ipc.DataNodeBackupRPC;
 import backup.namenode.ipc.NameNodeBackupRPC;
 import backup.namenode.ipc.NameNodeBackupRPCImpl;
+import backup.util.Closer;
 import classloader.FileClassLoader;
 import ducktyping.DuckTypeUtil;
 
@@ -71,6 +73,8 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
   private NameNodeRestoreProcessor restoreProcessor;
   private Server server;
   private HttpServer httpServer;
+
+  private Thread restoreOnStartup;
 
   @Override
   public void start(Object service) {
@@ -129,6 +133,27 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+    long millis = getConf().getLong(BACKUP_NAMENODE_SAFEMODE_WAIT_TIME, BACKUP_NAMENODE_SAFEMODE_WAIT_TIME_DEFAULT);
+    watchForNameDataNodesMissingAllBlocks(namenode, millis);
+  }
+
+  private void watchForNameDataNodesMissingAllBlocks(NameNode namenode, long waitTime) {
+    restoreOnStartup = new Thread(new Runnable() {
+      @Override
+      public void run() {
+        try {
+          Thread.sleep(waitTime);
+        } catch (InterruptedException e) {
+          return;
+        }
+        if (namenode.isInSafeMode()) {
+          restoreProcessor.restoreAll();
+        }
+      }
+    });
+    restoreOnStartup.setDaemon(true);
+    restoreOnStartup.setName("BackupSafeMode");
+    restoreOnStartup.start();
   }
 
   private static interface HttpServer {
@@ -140,6 +165,9 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
 
   @Override
   public void stop() {
+    if (restoreOnStartup != null) {
+      restoreOnStartup.interrupt();
+    }
     if (server != null) {
       server.stop();
     }

@@ -50,7 +50,6 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.io.Closer;
 
 import backup.Executable;
 import backup.datanode.ipc.BackupStats;
@@ -58,6 +57,7 @@ import backup.store.BackupStore;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
 import backup.store.LengthInputStream;
+import backup.util.Closer;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
 import backup.zookeeper.ZooKeeperLockManager;
@@ -248,5 +248,4 @@ public class DataNodeBackupProcessor implements Closeable {
       return System.currentTimeMillis() >= checkTime;
     }
   }
-
 }

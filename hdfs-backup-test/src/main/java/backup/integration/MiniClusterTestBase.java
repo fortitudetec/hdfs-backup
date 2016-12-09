@@ -177,6 +177,42 @@ public abstract class MiniClusterTestBase {
     }
   }
 
+  @Test
+  public void testIntegrationBasicFullRestoreFromShutdown() throws Exception {
+    File hdfsDir = setupHdfsLocalDir();
+    rmrZk(zkConnection, "/");
+    Configuration conf = setupConfig(hdfsDir, zkConnection);
+    {
+      MiniDFSCluster hdfsCluster = new MiniDFSCluster.Builder(conf).build();
+      try {
+        DistributedFileSystem fileSystem = hdfsCluster.getFileSystem();
+        for (int i = 0; i < 10; i++) {
+          writeFile(fileSystem, new Path("/testing." + i + ".txt"));
+        }
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+        hdfsCluster.stopDataNode(0);
+        hdfsCluster.shutdownNameNodes();
+
+        // Remove data
+        FileUtils.deleteDirectory(new File(hdfsDir, "data"));
+
+        hdfsCluster.restartNameNodes();
+        hdfsCluster.startDataNodes(conf, 1, true, null, null);
+
+        NameNode nameNode = hdfsCluster.getNameNode();
+        for (int i = 0; i < 90; i++) {
+          System.out.println(nameNode.getState() + " " + nameNode.isInSafeMode());
+          Thread.sleep(1000);
+        }
+      } finally {
+        hdfsCluster.shutdown();
+        destroyBackupStore(conf);
+      }
+    }
+  }
+
   private File setupHdfsLocalDir() throws IOException {
     FileUtils.deleteDirectory(tmpHdfs);
     File hdfsDir = new File(tmpHdfs, "testHdfs-" + UUID.randomUUID());

@@ -44,13 +44,12 @@ import org.apache.hadoop.util.DataChecksum.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.io.Closer;
-
 import backup.Executable;
 import backup.datanode.ipc.RestoreStats;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
+import backup.util.Closer;
 
 public class DataNodeRestoreProcessor implements Closeable {
 

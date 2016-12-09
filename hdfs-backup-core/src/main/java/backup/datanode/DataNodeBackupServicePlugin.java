@@ -57,6 +57,7 @@ public class DataNodeBackupServicePlugin extends Configured implements ServicePl
                                         .getInstance(datanode, () -> new DataNodeBackupProcessor(conf, datanode));
       restoreProcessor = SingletonManager.getManager(DataNodeRestoreProcessor.class)
                                          .getInstance(datanode, () -> new DataNodeRestoreProcessor(conf, datanode));
+
       DataNodeBackupRPCImpl backupRPCImpl = new DataNodeBackupRPCImpl(backupProcessor, restoreProcessor);
 
       InetSocketAddress listenerAddress = datanode.ipcServer.getListenerAddress();
@@ -73,6 +74,7 @@ public class DataNodeBackupServicePlugin extends Configured implements ServicePl
                                     .setProtocol(DataNodeBackupRPC.class)
                                     .build();
       server.start();
+
       LOG.info("DataNode Backup RPC listening on {}", port);
     } catch (Exception e) {
       throw new RuntimeException(e);

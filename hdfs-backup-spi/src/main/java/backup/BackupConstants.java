@@ -58,7 +58,7 @@ public class BackupConstants {
   public static final long DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DEFAULT = TimeUnit.HOURS.toMillis(3);
 
   public static final String DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_KEY = "dfs.backup.namenode.block.check.interval.delay";
-  public static final int DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_DEFAULT = (int) TimeUnit.HOURS.toMillis(1);
+  public static final long DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_DEFAULT = TimeUnit.HOURS.toMillis(1);
 
   public static final String DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY = "dfs.backup.namenode.local.dir";
 
@@ -70,4 +70,8 @@ public class BackupConstants {
 
   public static final String DFS_BACKUP_NAMENODE_HTTP_PORT_KEY = "dfs.backup.namenode.http.port";
   public static final int DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT = 50890;
+
+  public static final String BACKUP_NAMENODE_SAFEMODE_WAIT_TIME = "backup.namenode.safemode.wait.time";
+  public static final long BACKUP_NAMENODE_SAFEMODE_WAIT_TIME_DEFAULT = TimeUnit.MINUTES.toMillis(1);
+
 }
