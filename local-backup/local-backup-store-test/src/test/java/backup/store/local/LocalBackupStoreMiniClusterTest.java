@@ -48,10 +48,5 @@ public class LocalBackupStoreMiniClusterTest extends MiniClusterTestBase {
   protected String testVersion() {
     return "1.0";
   }
-  
-  @Override
-  public void testIntegrationBasic2() throws Exception {
-    super.testIntegrationBasic2();
-  }
 
 }
