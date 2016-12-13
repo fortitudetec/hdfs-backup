@@ -15,8 +15,6 @@
  */
 package backup.namenode;
 
-import static backup.BackupConstants.BACKUP_NAMENODE_SAFEMODE_WAIT_TIME;
-import static backup.BackupConstants.BACKUP_NAMENODE_SAFEMODE_WAIT_TIME_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_KEY;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT;
@@ -53,6 +51,7 @@ import backup.api.StatsService;
 import backup.datanode.ipc.DataNodeBackupRPC;
 import backup.namenode.ipc.NameNodeBackupRPC;
 import backup.namenode.ipc.NameNodeBackupRPCImpl;
+import backup.namenode.ipc.StatsWritable;
 import backup.util.Closer;
 import classloader.FileClassLoader;
 import ducktyping.DuckTypeUtil;
@@ -81,6 +80,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     NameNode namenode = (NameNode) service;
     RPC.setProtocolEngine(getConf(), DataNodeBackupRPC.class, WritableRpcEngine.class);
     RPC.setProtocolEngine(getConf(), NameNodeBackupRPC.class, WritableRpcEngine.class);
+    NameNodeBackupRPC nodeBackupRPCImpl;
     // This object is created here so that it's lifecycle follows the namenode
     try {
       restoreProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
@@ -95,7 +95,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       if (port == 0) {
         port = ipcPort + 1;
       }
-      NameNodeBackupRPC nodeBackupRPCImpl = new NameNodeBackupRPCImpl(getConf(), namenode, restoreProcessor);
+      nodeBackupRPCImpl = new NameNodeBackupRPCImpl(getConf(), namenode, restoreProcessor);
 
       server = new RPC.Builder(getConf()).setBindAddress(bindAddress)
                                          .setPort(port)
@@ -133,27 +133,16 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-    long millis = getConf().getLong(BACKUP_NAMENODE_SAFEMODE_WAIT_TIME, BACKUP_NAMENODE_SAFEMODE_WAIT_TIME_DEFAULT);
-    watchForNameDataNodesMissingAllBlocks(namenode, millis);
   }
 
-  private void watchForNameDataNodesMissingAllBlocks(NameNode namenode, long waitTime) {
-    restoreOnStartup = new Thread(new Runnable() {
-      @Override
-      public void run() {
-        try {
-          Thread.sleep(waitTime);
-        } catch (InterruptedException e) {
-          return;
-        }
-        if (namenode.isInSafeMode()) {
-          restoreProcessor.restoreAll();
-        }
-      }
-    });
-    restoreOnStartup.setDaemon(true);
-    restoreOnStartup.setName("BackupSafeMode");
-    restoreOnStartup.start();
+  protected boolean isMakingRestoreProgress(NameNodeBackupRPC nodeBackupRPC) throws IOException {
+    StatsWritable statsWritable = nodeBackupRPC.getStats();
+    LOG.info("Is Restore All Making Progress {}", statsWritable);
+    if (statsWritable.getRestoreBlocks() > 0 || statsWritable.getRestoresInProgressCount() > 0
+        || statsWritable.getRestoreBytesPerSecond() > 0.0) {
+      return true;
+    }
+    return false;
   }
 
   private static interface HttpServer {

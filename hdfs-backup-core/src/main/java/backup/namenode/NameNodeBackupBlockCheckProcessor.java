@@ -45,6 +45,9 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockCollection;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
+import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.slf4j.Logger;
@@ -72,8 +75,11 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private final Configuration conf;
   private final BackupStore backupStore;
   private final int batchSize;
+  private final NameNode namenode;
 
-  public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor) throws Exception {
+  public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor, NameNode namenode)
+      throws Exception {
+    this.namenode = namenode;
     this.conf = conf;
     this.processor = processor;
     backupStore = BackupStore.create(BackupUtil.convert(conf));
@@ -86,8 +92,8 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     start();
   }
 
-  public void runBlockCheck(boolean safeModeForce) throws Exception {
-    ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode(safeModeForce);
+  public void runBlockCheck() throws Exception {
+    ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode();
     ExternalExtendedBlockSort<NullWritable> backupBlocks = fetchBlocksFromBackupStore();
     try {
       nameNodeBlocks.finished();
@@ -193,8 +199,14 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
   private void restoreAll(ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
     ExtendedBlock block;
+    BlockManager blockManager = namenode.getNamesystem()
+                                        .getBlockManager();
     while ((block = buEnum.next()) != null) {
-      processor.requestRestore(block);
+      org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(block);
+      BlockCollection blockCollection = blockManager.getBlockCollection(heb.getLocalBlock());
+      if (blockCollection == null) {
+        processor.requestRestore(block);
+      }
     }
   }
 
@@ -252,32 +264,26 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     return backupBlocks;
   }
 
-  private ExternalExtendedBlockSort<Addresses> fetchBlocksFromNameNode(boolean safeModeForce) throws Exception {
+  private ExternalExtendedBlockSort<Addresses> fetchBlocksFromNameNode() throws Exception {
     Path sortDir = getLocalSort(NAMENODE_SORT);
     ExternalExtendedBlockSort<Addresses> nameNodeBlocks = new ExternalExtendedBlockSort<Addresses>(conf, sortDir,
         Addresses.class);
-    try {
-      RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(new Path("/"), true);
-      DFSClient client = fileSystem.getClient();
-      while (iterator.hasNext()) {
-        FileStatus fs = iterator.next();
-        String src = fs.getPath()
-                       .toUri()
-                       .getPath();
-        long start = 0;
-        long length = fs.getLen();
-        LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
-        for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
-          DatanodeInfo[] locations = locatedBlock.getLocations();
-          ExtendedBlock extendedBlock = BackupUtil.fromHadoop(locatedBlock.getBlock());
-          nameNodeBlocks.add(extendedBlock, new Addresses(locations));
-        }
+
+    RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(new Path("/"), true);
+    DFSClient client = fileSystem.getClient();
+    while (iterator.hasNext()) {
+      FileStatus fs = iterator.next();
+      String src = fs.getPath()
+                     .toUri()
+                     .getPath();
+      long start = 0;
+      long length = fs.getLen();
+      LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
+      for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
+        DatanodeInfo[] locations = locatedBlock.getLocations();
+        ExtendedBlock extendedBlock = BackupUtil.fromHadoop(locatedBlock.getBlock());
+        nameNodeBlocks.add(extendedBlock, new Addresses(locations));
       }
-    } catch (Exception e) {
-      if (safeModeForce) {
-        return nameNodeBlocks;
-      }
-      throw e;
     }
     return nameNodeBlocks;
   }
@@ -303,7 +309,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   @Override
   protected void runInternal() throws Exception {
     try {
-      runBlockCheck(false);
+      runBlockCheck();
     } catch (Throwable t) {
       LOG.error("Unknown error during block check", t);
       throw t;
@@ -396,4 +402,5 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
 
   }
+
 }

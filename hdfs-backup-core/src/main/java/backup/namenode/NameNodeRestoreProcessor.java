@@ -64,7 +64,7 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     currentRequestedRestore = Collections.newSetFromMap(cache.asMap());
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);
-    blockCheck = new NameNodeBackupBlockCheckProcessor(conf, this);
+    blockCheck = new NameNodeBackupBlockCheckProcessor(conf, this, namenode);
     start();
   }
 
@@ -93,14 +93,21 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
       ExtendedBlock extendedBlock = new ExtendedBlock(blockPoolId, blockId, length, generationStamp);
       if (!hasRestoreBeenRequested(extendedBlock)) {
         LOG.info("Need to restore block {}", extendedBlock);
-        requestRestore(extendedBlock);
+        requestRestoreInternal(extendedBlock);
         atLeastOneRestoreRequest = true;
       }
     }
     return atLeastOneRestoreRequest;
   }
 
-  public synchronized void requestRestore(ExtendedBlock extendedBlock) throws Exception {
+  public void requestRestore(ExtendedBlock extendedBlock) throws Exception {
+    if (!hasRestoreBeenRequested(extendedBlock)) {
+      LOG.info("Need to restore block {}", extendedBlock);
+      requestRestoreInternal(extendedBlock);
+    }
+  }
+
+  private synchronized void requestRestoreInternal(ExtendedBlock extendedBlock) throws Exception {
     Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager()
                                                     .getDatanodes();
     DatanodeInfo datanodeInfo = getDataNodeAddress(datanodes);
@@ -122,23 +129,14 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
   }
 
   public void runBlockCheck() throws Exception {
-    this.blockCheck.runBlockCheck(false);
+    this.blockCheck.runBlockCheck();
   }
 
   public void restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
     try {
-      requestRestore(new ExtendedBlock(poolId, blockId, length, generationStamp));
+      requestRestoreInternal(new ExtendedBlock(poolId, blockId, length, generationStamp));
     } catch (Exception e) {
       throw new IOException(e);
-    }
-  }
-
-  public void restoreAll() {
-    LOG.info("Restore All");
-    try {
-      blockCheck.runBlockCheck(true);
-    } catch (Exception e) {
-      LOG.error(e.getMessage(), e);
     }
   }
 

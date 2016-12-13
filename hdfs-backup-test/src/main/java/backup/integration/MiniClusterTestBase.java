@@ -186,7 +186,7 @@ public abstract class MiniClusterTestBase {
       MiniDFSCluster hdfsCluster = new MiniDFSCluster.Builder(conf).build();
       try {
         DistributedFileSystem fileSystem = hdfsCluster.getFileSystem();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 100; i++) {
           writeFile(fileSystem, new Path("/testing." + i + ".txt"));
         }
 
@@ -203,9 +203,13 @@ public abstract class MiniClusterTestBase {
 
         NameNode nameNode = hdfsCluster.getNameNode();
         for (int i = 0; i < 90; i++) {
+          if (!nameNode.isInSafeMode()) {
+            return;
+          }
           System.out.println(nameNode.getState() + " " + nameNode.isInSafeMode());
           Thread.sleep(1000);
         }
+        fail();
       } finally {
         hdfsCluster.shutdown();
         destroyBackupStore(conf);

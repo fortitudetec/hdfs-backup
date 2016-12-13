@@ -71,7 +71,4 @@ public class BackupConstants {
   public static final String DFS_BACKUP_NAMENODE_HTTP_PORT_KEY = "dfs.backup.namenode.http.port";
   public static final int DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT = 50890;
 
-  public static final String BACKUP_NAMENODE_SAFEMODE_WAIT_TIME = "backup.namenode.safemode.wait.time";
-  public static final long BACKUP_NAMENODE_SAFEMODE_WAIT_TIME_DEFAULT = TimeUnit.MINUTES.toMillis(1);
-
 }
