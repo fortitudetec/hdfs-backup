@@ -38,12 +38,12 @@
 		 <repository>
 		  <id>sigma-nexus</id>
 		  <name>sigma nexus</name>
-		  <url>${env.SIGMA_REPO}/repository/maven-releases</url>
+		  <url>${env.SIGMA_TLD_REPO_URI}/repository/maven-releases</url>
 		 </repository>
 		 <snapshotRepository>
 		  <id>sigma-nexus</id>
 		  <name>sigma nexus</name>
-		  <url>${env.SIGMA_REPO}/repository/maven-snapshots</url>
+		  <url>${env.SIGMA_TLD_REPO_URI}/repository/maven-snapshots</url>
 		 </snapshotRepository>
 		</distributionManagement>
 
@@ -51,7 +51,7 @@
 		 <repository>
 		  <id>sigma-nexus</id>
 		  <name>sigma</name>
-		  <url>${env.SIGMA_REPO}/repository/maven-public</url>
+		  <url>${env.SIGMA_TLD_REPO_URI}/repository/maven-public</url>
 		  <releases>
 		   <enabled>true</enabled>
 		  </releases>
@@ -65,7 +65,7 @@
 		 <pluginRepository>
 		  <id>sigma-nexus</id>
 		  <name>sigma</name>
-		  <url>${env.SIGMA_REPO}/repository/maven-public</url>
+		  <url>${env.SIGMA_TLD_REPO_URI}/repository/maven-public</url>
 		  <releases>
 		   <enabled>true</enabled>
 		  </releases>
