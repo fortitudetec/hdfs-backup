@@ -28,10 +28,9 @@ import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.Server;
 import org.apache.hadoop.ipc.WritableRpcEngine;
-import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.authorize.PolicyProvider;
 import org.apache.hadoop.security.authorize.Service;
-import org.apache.hadoop.security.token.SecretManager;
+import org.apache.hadoop.security.authorize.ServiceAuthorizationManager;
 import org.apache.hadoop.util.ServicePlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,37 +69,13 @@ public class DataNodeBackupServicePlugin extends Configured implements ServicePl
       if (port == 0) {
         port = ipcPort + 1;
       }
-      SecretManager<BackupTokenIdentifier> secretManager = null;
-
-      if (UserGroupInformation.isSecurityEnabled()) {
-        secretManager = new SecretManager<BackupTokenIdentifier>() {
-          @Override
-          protected byte[] createPassword(BackupTokenIdentifier identifier) {
-            LOG.info("createPassword");
-            return "backup".getBytes();
-          }
-
-          @Override
-          public byte[] retrievePassword(BackupTokenIdentifier identifier)
-              throws org.apache.hadoop.security.token.SecretManager.InvalidToken {
-            LOG.info("retrievePassword");
-            return "backup".getBytes();
-          }
-
-          @Override
-          public BackupTokenIdentifier createIdentifier() {
-            LOG.info("createIdentifier");
-            return new BackupTokenIdentifier();
-          }
-        };
-      }
       server = new RPC.Builder(conf).setBindAddress(bindAddress)
                                     .setPort(port)
                                     .setInstance(backupRPCImpl)
                                     .setProtocol(DataNodeBackupRPC.class)
-                                    .setSecretManager(secretManager)
                                     .build();
-
+      ServiceAuthorizationManager serviceAuthorizationManager = server.getServiceAuthorizationManager();
+      serviceAuthorizationManager.refresh(conf, new BackupPolicyProvider());
       server.start();
 
       LOG.info("DataNode Backup RPC listening on {}", port);

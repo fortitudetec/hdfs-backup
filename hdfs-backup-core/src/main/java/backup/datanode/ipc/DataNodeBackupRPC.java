@@ -22,13 +22,16 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.ipc.ProtocolInfo;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.net.NetUtils;
+import org.apache.hadoop.security.KerberosInfo;
 import org.apache.hadoop.security.UserGroupInformation;
 
-@ProtocolInfo(protocolName = "DataNodeBackupRPC", protocolVersion = 1)
+@KerberosInfo(serverPrincipal = DFSConfigKeys.DFS_DATANODE_KERBEROS_PRINCIPAL_KEY)
+@ProtocolInfo(protocolName = "backup.datanode.ipc.DataNodeBackupRPC", protocolVersion = 1)
 public interface DataNodeBackupRPC {
 
   public static DataNodeBackupRPC getDataNodeBackupRPC(DatanodeInfo datanodeInfo, Configuration conf,

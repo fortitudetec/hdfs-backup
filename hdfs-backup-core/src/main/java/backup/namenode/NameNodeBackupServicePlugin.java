@@ -17,8 +17,6 @@ package backup.namenode;
 
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_KEY;
-import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT;
-import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_KEY;
 
 import java.io.Closeable;
 import java.io.File;
@@ -27,7 +25,6 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,10 +34,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
-import org.apache.hadoop.ipc.RPC;
-import org.apache.hadoop.ipc.RPC.Server;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.ipc.WritableRpcEngine;
 import org.apache.hadoop.util.ServicePlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,10 +43,6 @@ import com.google.common.base.Splitter;
 
 import backup.SingletonManager;
 import backup.api.StatsService;
-import backup.datanode.ipc.DataNodeBackupRPC;
-import backup.namenode.ipc.NameNodeBackupRPC;
-import backup.namenode.ipc.NameNodeBackupRPCImpl;
-import backup.namenode.ipc.StatsWritable;
 import backup.util.Closer;
 import classloader.FileClassLoader;
 import ducktyping.DuckTypeUtil;
@@ -71,7 +61,6 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
   private static final String HDFS_BACKUP_STATUS_RESOURCES_ZIP_ENV = "HDFS_BACKUP_STATUS_ZIP";
 
   private NameNodeRestoreProcessor restoreProcessor;
-  private Server server;
   private HttpServer httpServer;
 
   private Thread restoreOnStartup;
@@ -86,32 +75,12 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       throw new RuntimeException(e);
     }
     NameNode namenode = (NameNode) service;
-    RPC.setProtocolEngine(getConf(), DataNodeBackupRPC.class, WritableRpcEngine.class);
-    RPC.setProtocolEngine(getConf(), NameNodeBackupRPC.class, WritableRpcEngine.class);
-    NameNodeBackupRPC nodeBackupRPCImpl;
     // This object is created here so that it's lifecycle follows the namenode
     try {
       restoreProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
                                          .getInstance(namenode,
                                              () -> new NameNodeRestoreProcessor(getConf(), namenode, ugi));
-
-      InetSocketAddress listenerAddress = namenode.getServiceRpcAddress();
-      int ipcPort = listenerAddress.getPort();
-      String bindAddress = listenerAddress.getAddress()
-                                          .getHostAddress();
-      int port = getConf().getInt(DFS_BACKUP_NAMENODE_RPC_PORT_KEY, DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT);
-      if (port == 0) {
-        port = ipcPort + 1;
-      }
-      nodeBackupRPCImpl = new NameNodeBackupRPCImpl(getConf(), namenode, restoreProcessor, ugi);
-
-      server = new RPC.Builder(getConf()).setBindAddress(bindAddress)
-                                         .setPort(port)
-                                         .setInstance(nodeBackupRPCImpl)
-                                         .setProtocol(NameNodeBackupRPC.class)
-                                         .build();
-      server.start();
-      LOG.info("NameNode Backup RPC listening on {}", port);
+      LOG.info("NameNode Backup plugin setup using UGI {}", ugi);
 
       int httpPort = getConf().getInt(DFS_BACKUP_NAMENODE_HTTP_PORT_KEY, DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT);
       if (httpPort != 0) {
@@ -120,13 +89,18 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
           ClassLoader contextClassLoader = Thread.currentThread()
                                                  .getContextClassLoader();
           try {
+
+            // @TODO
+            Object statsImpl = null;
+
             // Have to setup classloader in thread context to get the static
             // files in the http server tp be setup correctly.
             Thread.currentThread()
                   .setContextClassLoader(classLoader);
             Class<?> backupStatusServerClass = classLoader.loadClass(BACKUP_STATUS_BACKUP_STATUS_SERVER);
+
             Object server = DuckTypeUtil.newInstance(backupStatusServerClass,
-                new Class[] { Integer.TYPE, StatsService.class }, new Object[] { httpPort, nodeBackupRPCImpl });
+                new Class[] { Integer.TYPE, StatsService.class }, new Object[] { httpPort, statsImpl });
             httpServer = DuckTypeUtil.wrap(HttpServer.class, server);
             httpServer.start();
             LOG.info("NameNode Backup HTTP listening on {}", httpPort);
@@ -143,16 +117,6 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     }
   }
 
-  protected boolean isMakingRestoreProgress(NameNodeBackupRPC nodeBackupRPC) throws IOException {
-    StatsWritable statsWritable = nodeBackupRPC.getStats();
-    LOG.info("Is Restore All Making Progress {}", statsWritable);
-    if (statsWritable.getRestoreBlocks() > 0 || statsWritable.getRestoresInProgressCount() > 0
-        || statsWritable.getRestoreBytesPerSecond() > 0.0) {
-      return true;
-    }
-    return false;
-  }
-
   private static interface HttpServer {
 
     void start();
@@ -164,9 +128,6 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
   public void stop() {
     if (restoreOnStartup != null) {
       restoreOnStartup.interrupt();
-    }
-    if (server != null) {
-      server.stop();
     }
     if (httpServer != null) {
       httpServer.stop();
