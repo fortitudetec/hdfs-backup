@@ -28,6 +28,10 @@ import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.Server;
 import org.apache.hadoop.ipc.WritableRpcEngine;
+import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.authorize.PolicyProvider;
+import org.apache.hadoop.security.authorize.Service;
+import org.apache.hadoop.security.token.SecretManager;
 import org.apache.hadoop.util.ServicePlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +39,6 @@ import org.slf4j.LoggerFactory;
 import backup.SingletonManager;
 import backup.datanode.ipc.DataNodeBackupRPC;
 import backup.datanode.ipc.DataNodeBackupRPCImpl;
-import backup.namenode.ipc.NameNodeBackupRPC;
 
 public class DataNodeBackupServicePlugin extends Configured implements ServicePlugin {
 
@@ -50,7 +53,6 @@ public class DataNodeBackupServicePlugin extends Configured implements ServicePl
     DataNode datanode = (DataNode) service;
     Configuration conf = getConf();
     RPC.setProtocolEngine(conf, DataNodeBackupRPC.class, WritableRpcEngine.class);
-    RPC.setProtocolEngine(conf, NameNodeBackupRPC.class, WritableRpcEngine.class);
     // This object is created here so that it's lifecycle follows the datanode
     try {
       backupProcessor = SingletonManager.getManager(DataNodeBackupProcessor.class)
@@ -68,11 +70,37 @@ public class DataNodeBackupServicePlugin extends Configured implements ServicePl
       if (port == 0) {
         port = ipcPort + 1;
       }
+      SecretManager<BackupTokenIdentifier> secretManager = null;
+
+      if (UserGroupInformation.isSecurityEnabled()) {
+        secretManager = new SecretManager<BackupTokenIdentifier>() {
+          @Override
+          protected byte[] createPassword(BackupTokenIdentifier identifier) {
+            LOG.info("createPassword");
+            return "backup".getBytes();
+          }
+
+          @Override
+          public byte[] retrievePassword(BackupTokenIdentifier identifier)
+              throws org.apache.hadoop.security.token.SecretManager.InvalidToken {
+            LOG.info("retrievePassword");
+            return "backup".getBytes();
+          }
+
+          @Override
+          public BackupTokenIdentifier createIdentifier() {
+            LOG.info("createIdentifier");
+            return new BackupTokenIdentifier();
+          }
+        };
+      }
       server = new RPC.Builder(conf).setBindAddress(bindAddress)
                                     .setPort(port)
                                     .setInstance(backupRPCImpl)
                                     .setProtocol(DataNodeBackupRPC.class)
+                                    .setSecretManager(secretManager)
                                     .build();
+
       server.start();
 
       LOG.info("DataNode Backup RPC listening on {}", port);
@@ -95,4 +123,21 @@ public class DataNodeBackupServicePlugin extends Configured implements ServicePl
     stop();
   }
 
+  public static class BackupPolicyProvider extends PolicyProvider {
+
+    @Override
+    public Service[] getServices() {
+      return new Service[] { new BackupService() };
+    }
+  }
+
+  public static class BackupService extends Service {
+
+    private static final String SECURITY_DATANODE_BACKUP_PROTOCOL_ACL = "security.datanode.backup.protocol.acl";
+
+    public BackupService() {
+      super(SECURITY_DATANODE_BACKUP_PROTOCOL_ACL, DataNodeBackupRPC.class);
+    }
+
+  }
 }

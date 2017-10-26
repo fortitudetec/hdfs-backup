@@ -25,33 +25,36 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.ipc.ProtocolInfo;
 import org.apache.hadoop.ipc.RPC;
+import org.apache.hadoop.net.NetUtils;
+import org.apache.hadoop.security.UserGroupInformation;
 
 @ProtocolInfo(protocolName = "DataNodeBackupRPC", protocolVersion = 1)
 public interface DataNodeBackupRPC {
 
-  public static DataNodeBackupRPC getDataNodeBackupRPC(DatanodeInfo datanodeInfo, Configuration conf)
-      throws IOException {
+  public static DataNodeBackupRPC getDataNodeBackupRPC(DatanodeInfo datanodeInfo, Configuration conf,
+      UserGroupInformation ugi) throws IOException, InterruptedException {
     String ipcHostname = datanodeInfo.getHostName();
     int ipcPort = datanodeInfo.getIpcPort();
     InetSocketAddress dataNodeIPCAddress = new InetSocketAddress(ipcHostname, ipcPort);
-    return getDataNodeBackupRPC(dataNodeIPCAddress, conf);
+    return getDataNodeBackupRPC(dataNodeIPCAddress, conf, ugi);
   }
 
-  public static DataNodeBackupRPC getDataNodeBackupRPC(InetSocketAddress dataNodeIPCAddress, Configuration conf)
-      throws IOException {
+  public static DataNodeBackupRPC getDataNodeBackupRPC(InetSocketAddress dataNodeIPCAddress, Configuration conf,
+      UserGroupInformation ugi) throws IOException, InterruptedException {
     int port = conf.getInt(DFS_BACKUP_DATANODE_RPC_PORT_KEY, DFS_BACKUP_DATANODE_RPC_PORT_DEFAULT);
     if (port == 0) {
       port = dataNodeIPCAddress.getPort() + 1;
     }
     InetSocketAddress dataNodeAddress = new InetSocketAddress(dataNodeIPCAddress.getAddress(), port);
-    return RPC.getProxy(DataNodeBackupRPC.class, RPC.getProtocolVersion(DataNodeBackupRPC.class), dataNodeAddress,
-        conf);
+    return RPC.getProtocolProxy(DataNodeBackupRPC.class, RPC.getProtocolVersion(DataNodeBackupRPC.class),
+        dataNodeAddress, ugi, conf, NetUtils.getDefaultSocketFactory(conf))
+              .getProxy();
   }
 
   void backupBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
 
   boolean restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
-  
+
   boolean isRestoringBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
 
   BackupStats getBackupStats() throws IOException;

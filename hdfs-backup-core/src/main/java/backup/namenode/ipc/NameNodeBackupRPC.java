@@ -24,29 +24,34 @@ import java.net.InetSocketAddress;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.ipc.ProtocolInfo;
 import org.apache.hadoop.ipc.RPC;
+import org.apache.hadoop.net.NetUtils;
+import org.apache.hadoop.security.UserGroupInformation;
 
 import backup.api.StatsService;
 
 @ProtocolInfo(protocolName = "NameNodeBackupRPC", protocolVersion = 1)
 public interface NameNodeBackupRPC extends StatsService<StatsWritable> {
 
-  public static NameNodeBackupRPC getNameNodeBackupRPC(String host, Configuration conf) throws IOException {
+  public static NameNodeBackupRPC getNameNodeBackupRPC(String host, Configuration conf, UserGroupInformation ugi)
+      throws IOException, InterruptedException {
     int port = conf.getInt(DFS_BACKUP_NAMENODE_RPC_PORT_KEY, DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT);
     if (port == 0) {
       throw new RuntimeException("Can not determine port.");
     }
-    return RPC.getProxy(NameNodeBackupRPC.class, RPC.getProtocolVersion(NameNodeBackupRPC.class),
-        new InetSocketAddress(host, port), conf);
+    return RPC.getProtocolProxy(NameNodeBackupRPC.class, RPC.getProtocolVersion(NameNodeBackupRPC.class),
+        new InetSocketAddress(host, port), ugi, conf, NetUtils.getDefaultSocketFactory(conf))
+              .getProxy();
   }
 
-  public static NameNodeBackupRPC getNameNodeBackupRPC(InetSocketAddress nameNodeAddress, Configuration conf)
-      throws IOException {
+  public static NameNodeBackupRPC getNameNodeBackupRPC(InetSocketAddress nameNodeAddress, Configuration conf,
+      UserGroupInformation ugi) throws IOException, InterruptedException {
     int port = conf.getInt(DFS_BACKUP_NAMENODE_RPC_PORT_KEY, DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT);
     if (port == 0) {
       port = nameNodeAddress.getPort() + 1;
     }
-    return RPC.getProxy(NameNodeBackupRPC.class, RPC.getProtocolVersion(NameNodeBackupRPC.class), nameNodeAddress,
-        conf);
+    return RPC.getProtocolProxy(NameNodeBackupRPC.class, RPC.getProtocolVersion(NameNodeBackupRPC.class),
+        nameNodeAddress, ugi, conf, NetUtils.getDefaultSocketFactory(conf))
+              .getProxy();
   }
 
   void backupBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;

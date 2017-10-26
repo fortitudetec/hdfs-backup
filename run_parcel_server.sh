@@ -10,13 +10,15 @@ function buildHttpDir {
   PROJECT_DIR=$1
   cd "$PROJECT_DIR"
 
-  PARCEL_VERSION=`mvn help:evaluate $MAVEN_ARGS -Dexpression=parcel.version | grep -Ev '(^\[|Download\w+:)'`
-  echo "PARCEL_VERSION=${PARCEL_VERSION}"
   TARGET="${PROJECT_DIR}/target"
 
   PARCEL_NAME=`mvn help:evaluate $MAVEN_ARGS -Dexpression=parcel.name | grep -Ev '(^\[|Download\w+:)'`
 
+  LONG_FILENAME=$(ls -1 ${TARGET}/${PARCEL_NAME}-*.tar.gz)
+  FILENAME=$(basename ${LONG_FILENAME})
 
+  PARCEL_VERSION=$(echo ${FILENAME} | sed -e "s/${PARCEL_NAME}-//g" | sed -e 's/.tar.gz//g')
+  echo "PARCEL_VERSION=${PARCEL_VERSION}"
 
   PARCEL="${TARGET}/${PARCEL_NAME}-${PARCEL_VERSION}.tar.gz"
   PARCEL_SHA="${PARCEL}.sha"

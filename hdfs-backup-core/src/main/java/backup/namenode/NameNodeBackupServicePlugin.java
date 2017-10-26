@@ -39,6 +39,7 @@ import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.Server;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.ipc.WritableRpcEngine;
 import org.apache.hadoop.util.ServicePlugin;
 import org.slf4j.Logger;
@@ -77,6 +78,13 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
 
   @Override
   public void start(Object service) {
+    UserGroupInformation ugi;
+    try {
+      ugi = UserGroupInformation.getCurrentUser();
+      LOG.info("Starting NameNodeBackupServicePlugin with ugi {}", ugi);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
     NameNode namenode = (NameNode) service;
     RPC.setProtocolEngine(getConf(), DataNodeBackupRPC.class, WritableRpcEngine.class);
     RPC.setProtocolEngine(getConf(), NameNodeBackupRPC.class, WritableRpcEngine.class);
@@ -85,7 +93,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     try {
       restoreProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
                                          .getInstance(namenode,
-                                             () -> new NameNodeRestoreProcessor(getConf(), namenode));
+                                             () -> new NameNodeRestoreProcessor(getConf(), namenode, ugi));
 
       InetSocketAddress listenerAddress = namenode.getServiceRpcAddress();
       int ipcPort = listenerAddress.getPort();
@@ -95,7 +103,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       if (port == 0) {
         port = ipcPort + 1;
       }
-      nodeBackupRPCImpl = new NameNodeBackupRPCImpl(getConf(), namenode, restoreProcessor);
+      nodeBackupRPCImpl = new NameNodeBackupRPCImpl(getConf(), namenode, restoreProcessor, ugi);
 
       server = new RPC.Builder(getConf()).setBindAddress(bindAddress)
                                          .setPort(port)

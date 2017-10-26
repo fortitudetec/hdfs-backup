@@ -22,8 +22,7 @@ import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.SystemConfiguration;
 
 import com.amazonaws.metrics.AwsSdkMetrics;
-import com.amazonaws.regions.Region;
-import com.amazonaws.regions.Regions;
+import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
@@ -140,7 +139,7 @@ public class S3BackupStore extends BackupStore {
     }
     String region = conf.getString(DFS_BACKUP_S3_REGION_KEY);
     if (region != null) {
-      s3Client.setRegion(Region.getRegion(Regions.fromName(region)));
+      s3Client.setRegion(RegionUtils.getRegion(region));
       AwsSdkMetrics.setRegion(region);
     }
   }

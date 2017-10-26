@@ -19,27 +19,32 @@ import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
+import com.google.common.collect.Iterators;
 
 import backup.store.BackupStore;
 import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
 import backup.store.LengthInputStream;
 
-import com.google.common.collect.Iterators;
-
 public class LocalBackupStore extends BackupStore {
+
+  private final static Logger LOG = LoggerFactory.getLogger(LocalBackupStore.class);
 
   private static final String META = ".meta";
   private static final String DATA = ".data";
@@ -57,10 +62,17 @@ public class LocalBackupStore extends BackupStore {
   @Override
   public void backupBlock(ExtendedBlock extendedBlock, LengthInputStream data, LengthInputStream metaData)
       throws Exception {
+    LOG.info("before sleep backupBlock {} dataLength {} metaDataLength", extendedBlock, data.getLength(), metaData.getLength());
+    Thread.sleep(TimeUnit.SECONDS.toMillis(1));
+    LOG.info("after sleep backupBlock {} dataLength {} metaDataLength", extendedBlock, data.getLength(), metaData.getLength());
     File dataFile = getDataFile(extendedBlock);
     File metaDataFile = getMetaDataFile(extendedBlock);
     try (FileOutputStream output = new FileOutputStream(dataFile)) {
       IOUtils.copy(data, output);
+    }
+    if (dataFile.length() != extendedBlock.getLength()) {
+      throw new IOException(
+          "length of backup file " + dataFile.length() + " different than block " + extendedBlock.getLength());
     }
     try (FileOutputStream output = new FileOutputStream(metaDataFile)) {
       IOUtils.copy(metaData, output);

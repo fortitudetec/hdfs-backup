@@ -50,6 +50,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,9 +77,11 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private final BackupStore backupStore;
   private final int batchSize;
   private final NameNode namenode;
+  private final UserGroupInformation ugi;
 
-  public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor, NameNode namenode)
-      throws Exception {
+  public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor, NameNode namenode,
+      UserGroupInformation ugi) throws Exception {
+    this.ugi = ugi;
     this.namenode = namenode;
     this.conf = conf;
     this.processor = processor;
@@ -93,6 +96,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   }
 
   public void runBlockCheck() throws Exception {
+    LOG.info("Starting backup block report.");
     ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode();
     ExternalExtendedBlockSort<NullWritable> backupBlocks = fetchBlocksFromBackupStore();
     try {
@@ -110,10 +114,12 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       IOUtils.closeQuietly(nameNodeBlocks);
       IOUtils.closeQuietly(backupBlocks);
     }
+    LOG.info("Finished backup block report.");
   }
 
   private void checkBlockPool(String blockPoolId, ExternalExtendedBlockSort<Addresses> nameNodeBlocks,
       ExternalExtendedBlockSort<NullWritable> backupBlocks) throws Exception {
+    LOG.info("Backup block report for block pool {}.", blockPoolId);
     ExtendedBlockEnum<Addresses> nnEnum = null;
     ExtendedBlockEnum<NullWritable> buEnum = null;
     try {
@@ -236,7 +242,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     for (ExtendedBlockWithAddress extendedBlockWithAddress : batch) {
       LOG.info("Backup block request {}", extendedBlockWithAddress.getExtendedBlock());
       InetSocketAddress dataNodeAddress = chooseOneAtRandom(extendedBlockWithAddress.getAddresses());
-      DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(dataNodeAddress, conf);
+      DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(dataNodeAddress, conf, ugi);
       ExtendedBlock extendedBlock = extendedBlockWithAddress.getExtendedBlock();
       backup.backupBlock(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
           extendedBlock.getGenerationStamp());

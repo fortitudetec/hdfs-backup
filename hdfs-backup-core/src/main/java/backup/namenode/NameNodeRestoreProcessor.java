@@ -32,6 +32,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,8 +54,10 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
   private final Configuration conf;
   private final FSNamesystem namesystem;
   private final BlockManager blockManager;
+  private final UserGroupInformation ugi;
 
-  public NameNodeRestoreProcessor(Configuration conf, NameNode namenode) throws Exception {
+  public NameNodeRestoreProcessor(Configuration conf, NameNode namenode, UserGroupInformation ugi) throws Exception {
+    this.ugi = ugi;
     this.conf = conf;
     this.namesystem = namenode.getNamesystem();
     this.blockManager = namesystem.getBlockManager();
@@ -64,7 +67,7 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     currentRequestedRestore = Collections.newSetFromMap(cache.asMap());
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);
-    blockCheck = new NameNodeBackupBlockCheckProcessor(conf, this, namenode);
+    blockCheck = new NameNodeBackupBlockCheckProcessor(conf, this, namenode, ugi);
     start();
   }
 
@@ -111,7 +114,7 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager()
                                                     .getDatanodes();
     DatanodeInfo datanodeInfo = getDataNodeAddress(datanodes);
-    DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeInfo, conf);
+    DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeInfo, conf, ugi);
     if (backup.restoreBlock(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
         extendedBlock.getGenerationStamp())) {
       currentRequestedRestore.add(extendedBlock);

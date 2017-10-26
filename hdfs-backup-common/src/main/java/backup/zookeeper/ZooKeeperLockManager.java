@@ -95,7 +95,7 @@ public class ZooKeeperLockManager implements Closeable {
 
   public boolean tryToLock(String name) throws KeeperException, InterruptedException {
     if (_lockMap.containsKey(name)) {
-      throw new RuntimeException("Lock [" + name + "] already created.");
+      return false;
     }
     String newPath = _zooKeeper.create(_lockPath + "/" + name + "_", null, Ids.OPEN_ACL_UNSAFE,
         CreateMode.EPHEMERAL_SEQUENTIAL);

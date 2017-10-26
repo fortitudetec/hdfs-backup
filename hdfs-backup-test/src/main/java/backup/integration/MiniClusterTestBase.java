@@ -306,9 +306,20 @@ public abstract class MiniClusterTestBase {
     }
   }
 
-  private void writeFile(DistributedFileSystem fileSystem, Path path) throws IOException {
+  private void writeFile(DistributedFileSystem fileSystem, Path path) throws IOException, InterruptedException {
     try (FSDataOutputStream outputStream = fileSystem.create(path)) {
-      outputStream.write("abc".getBytes());
+      for (int i = 0; i < 100; i++) {
+        outputStream.write("abc".getBytes());
+        outputStream.hsync();
+        Thread.sleep(50);
+      }
+    }
+    try (FSDataOutputStream outputStream = fileSystem.append(path)) {
+      for (int i = 0; i < 100; i++) {
+        outputStream.write("abc".getBytes());
+        outputStream.hsync();
+        Thread.sleep(50);
+      }
     }
   }
 

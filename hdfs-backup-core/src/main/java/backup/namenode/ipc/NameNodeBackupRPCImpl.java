@@ -8,6 +8,7 @@ import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,8 +22,11 @@ public class NameNodeBackupRPCImpl implements NameNodeBackupRPC {
   private final NameNodeRestoreProcessor restoreProcessor;
   private final BlockManager blockManager;
   private final Configuration conf;
+  private final UserGroupInformation ugi;
 
-  public NameNodeBackupRPCImpl(Configuration conf, NameNode nameNode, NameNodeRestoreProcessor restoreProcessor) {
+  public NameNodeBackupRPCImpl(Configuration conf, NameNode nameNode, NameNodeRestoreProcessor restoreProcessor,
+      UserGroupInformation ugi) {
+    this.ugi = ugi;
     this.conf = conf;
     this.restoreProcessor = restoreProcessor;
     this.blockManager = nameNode.getNamesystem()
@@ -46,7 +50,7 @@ public class NameNodeBackupRPCImpl implements NameNodeBackupRPC {
                                                     .getDatanodes();
     for (DatanodeInfo datanodeInfo : datanodes) {
       try {
-        DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeInfo, conf);
+        DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeInfo, conf, ugi);
         stats.add(backup.getBackupStats());
         stats.add(backup.getRestoreStats());
       } catch (Exception e) {
