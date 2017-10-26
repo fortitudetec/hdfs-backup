@@ -27,12 +27,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configured;
+import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
+import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.ServicePlugin;
@@ -42,7 +46,10 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Splitter;
 
 import backup.SingletonManager;
+import backup.api.Stats;
 import backup.api.StatsService;
+import backup.datanode.ipc.DataNodeBackupRPC;
+import backup.namenode.ipc.StatsWritable;
 import backup.util.Closer;
 import classloader.FileClassLoader;
 import ducktyping.DuckTypeUtil;
@@ -75,6 +82,8 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       throw new RuntimeException(e);
     }
     NameNode namenode = (NameNode) service;
+    BlockManager blockManager = namenode.getNamesystem()
+                                        .getBlockManager();
     // This object is created here so that it's lifecycle follows the namenode
     try {
       restoreProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
@@ -89,9 +98,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
           ClassLoader contextClassLoader = Thread.currentThread()
                                                  .getContextClassLoader();
           try {
-
-            // @TODO
-            Object statsImpl = null;
+            StatsService<Stats> stats = getStatsService(ugi, blockManager);
 
             // Have to setup classloader in thread context to get the static
             // files in the http server tp be setup correctly.
@@ -100,7 +107,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
             Class<?> backupStatusServerClass = classLoader.loadClass(BACKUP_STATUS_BACKUP_STATUS_SERVER);
 
             Object server = DuckTypeUtil.newInstance(backupStatusServerClass,
-                new Class[] { Integer.TYPE, StatsService.class }, new Object[] { httpPort, statsImpl });
+                new Class[] { Integer.TYPE, StatsService.class }, new Object[] { httpPort, stats });
             httpServer = DuckTypeUtil.wrap(HttpServer.class, server);
             httpServer.start();
             LOG.info("NameNode Backup HTTP listening on {}", httpPort);
@@ -115,6 +122,27 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+  }
+
+  private StatsService<Stats> getStatsService(UserGroupInformation ugi, BlockManager blockManager) {
+    return new StatsService<Stats>() {
+      @Override
+      public StatsWritable getStats() throws IOException {
+        StatsWritable stats = new StatsWritable();
+        Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager()
+                                                        .getDatanodes();
+        for (DatanodeInfo datanodeInfo : datanodes) {
+          try {
+            DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeInfo, getConf(), ugi);
+            stats.add(backup.getBackupStats());
+            stats.add(backup.getRestoreStats());
+          } catch (Exception e) {
+            LOG.error("Error while trying to read hdfs backup stats from datanode {}", datanodeInfo.getHostName());
+          }
+        }
+        return stats;
+      }
+    };
   }
 
   private static interface HttpServer {
