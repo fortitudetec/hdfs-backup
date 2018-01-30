@@ -56,6 +56,8 @@ import org.slf4j.LoggerFactory;
 
 import backup.BaseProcessor;
 import backup.datanode.ipc.DataNodeBackupRPC;
+import backup.namenode.report.BackReportWriter;
+import backup.namenode.report.LoggerBackupReportWriter;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
@@ -63,6 +65,9 @@ import backup.store.ExtendedBlockEnum;
 import backup.store.ExternalExtendedBlockSort;
 
 public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
+
+  // private static final String USER_HDFS_BACKUP_REPORTS =
+  // "/user/hdfs/.backup/reports";
 
   private final static Logger LOG = LoggerFactory.getLogger(NameNodeBackupBlockCheckProcessor.class);
 
@@ -78,6 +83,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private final int batchSize;
   private final NameNode namenode;
   private final UserGroupInformation ugi;
+  // private final Path _reportPath = new Path(USER_HDFS_BACKUP_REPORTS);
 
   public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor, NameNode namenode,
       UserGroupInformation ugi) throws Exception {
@@ -96,42 +102,48 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   }
 
   public void runBlockCheck() throws Exception {
-    LOG.info("Starting backup block report.");
-    ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode();
-    ExternalExtendedBlockSort<NullWritable> backupBlocks = fetchBlocksFromBackupStore();
-    try {
-      nameNodeBlocks.finished();
-      backupBlocks.finished();
+    // new BackupReportWriterToHdfs(fileSystem, _reportPath)
+    try (BackReportWriter writer = new LoggerBackupReportWriter()) {
+      LOG.info("Starting backup block report.");
+      writer.start();
+      ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode(writer);
+      ExternalExtendedBlockSort<NullWritable> backupBlocks = fetchBlocksFromBackupStore(writer);
+      try {
+        nameNodeBlocks.finished();
+        backupBlocks.finished();
 
-      Set<String> blockPoolIds = new HashSet<>();
-      blockPoolIds.addAll(nameNodeBlocks.getBlockPoolIds());
-      blockPoolIds.addAll(backupBlocks.getBlockPoolIds());
+        Set<String> blockPoolIds = new HashSet<>();
+        blockPoolIds.addAll(nameNodeBlocks.getBlockPoolIds());
+        blockPoolIds.addAll(backupBlocks.getBlockPoolIds());
 
-      for (String blockPoolId : blockPoolIds) {
-        checkBlockPool(blockPoolId, nameNodeBlocks, backupBlocks);
+        for (String blockPoolId : blockPoolIds) {
+          writer.startBlockPoolCheck(blockPoolId);
+          checkBlockPool(blockPoolId, nameNodeBlocks, backupBlocks, writer);
+          writer.completeBlockPoolCheck(blockPoolId);
+        }
+      } finally {
+        IOUtils.closeQuietly(nameNodeBlocks);
+        IOUtils.closeQuietly(backupBlocks);
       }
-    } finally {
-      IOUtils.closeQuietly(nameNodeBlocks);
-      IOUtils.closeQuietly(backupBlocks);
+      LOG.info("Finished backup block report.");
+      writer.complete();
     }
-    LOG.info("Finished backup block report.");
   }
 
   private void checkBlockPool(String blockPoolId, ExternalExtendedBlockSort<Addresses> nameNodeBlocks,
-      ExternalExtendedBlockSort<NullWritable> backupBlocks) throws Exception {
+      ExternalExtendedBlockSort<NullWritable> backupBlocks, BackReportWriter writer) throws Exception {
     LOG.info("Backup block report for block pool {}.", blockPoolId);
     ExtendedBlockEnum<Addresses> nnEnum = null;
     ExtendedBlockEnum<NullWritable> buEnum = null;
     try {
       nnEnum = nameNodeBlocks.getBlockEnum(blockPoolId);
       buEnum = backupBlocks.getBlockEnum(blockPoolId);
-
       if (nnEnum == null) {
-        restoreAll(buEnum);
+        restoreAll(writer, buEnum);
       } else if (buEnum == null) {
-        backupAll(nnEnum);
+        backupAll(writer, nnEnum);
       } else {
-        checkAllBlocks(nnEnum, buEnum);
+        checkAllBlocks(writer, nnEnum, buEnum);
       }
     } finally {
       IOUtils.closeQuietly(buEnum);
@@ -139,8 +151,8 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void checkAllBlocks(ExtendedBlockEnum<Addresses> nnEnum, ExtendedBlockEnum<NullWritable> buEnum)
-      throws Exception {
+  private void checkAllBlocks(BackReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum,
+      ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
     nnEnum.next();
     buEnum.next();
     List<ExtendedBlockWithAddress> backupBatch = new ArrayList<>();
@@ -149,10 +161,10 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
         if (buEnum.current() == null && nnEnum.current() == null) {
           return;
         } else if (buEnum.current() == null) {
-          backupAll(nnEnum);
+          backupAll(writer, nnEnum);
           return;
         } else if (nnEnum.current() == null) {
-          deleteAllFromBackupStore(buEnum);
+          deleteAllFromBackupStore(writer, buEnum);
           return;
         }
 
@@ -169,19 +181,29 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
         int compare = Long.compare(nn.getBlockId(), bu.getBlockId());
         if (compare == 0) {
           // Blocks not equal but block ids present in both reports. Backup.
-          backupStore.deleteBlock(bu);
-          backupBlock(backupBatch, nnEnum);
+          writer.deleteBackupBlock(bu);
+          try {
+            backupStore.deleteBlock(bu);
+          } catch (Exception e) {
+            LOG.error("Unknown error while trying to delete block " + bu, e);
+          }
+          backupBlock(writer, backupBatch, nnEnum);
           nnEnum.next();
           buEnum.next();
         } else if (compare < 0) {
           // nn 123, bu 124
           // Missing backup block. Backup.
-          backupBlock(backupBatch, nnEnum);
+          backupBlock(writer, backupBatch, nnEnum);
           nnEnum.next();
         } else {
           // nn 125, bu 124
           // Missing namenode block. Remove from backup.
-          backupStore.deleteBlock(bu);
+          try {
+            writer.deleteBackupBlock(bu);
+            backupStore.deleteBlock(bu);
+          } catch (Exception e) {
+            LOG.error("Unknown error while trying to delete block " + bu, e);
+          }
           buEnum.next();
         }
       }
@@ -193,17 +215,29 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void deleteAllFromBackupStore(ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
-    if (buEnum.current() != null) {
-      backupStore.deleteBlock(buEnum.current());
+  private void deleteAllFromBackupStore(BackReportWriter writer, ExtendedBlockEnum<NullWritable> buEnum)
+      throws Exception {
+    ExtendedBlock block = buEnum.current();
+    if (block != null) {
+      try {
+        writer.deleteBackupBlock(block);
+        backupStore.deleteBlock(block);
+      } catch (Exception e) {
+        LOG.error("Unknown error while trying to delete block " + block, e);
+      }
     }
-    ExtendedBlock block;
     while ((block = buEnum.next()) != null) {
-      backupStore.deleteBlock(block);
+      try {
+        writer.deleteBackupBlock(block);
+        backupStore.deleteBlock(block);
+      } catch (Exception e) {
+        LOG.error("Unknown error while trying to delete block " + block, e);
+      }
     }
   }
 
-  private void restoreAll(ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
+  private void restoreAll(BackReportWriter writer, ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
+    writer.startRestoreAll();
     ExtendedBlock block;
     BlockManager blockManager = namenode.getNamesystem()
                                         .getBlockManager();
@@ -211,26 +245,36 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(block);
       BlockCollection blockCollection = blockManager.getBlockCollection(heb.getLocalBlock());
       if (blockCollection == null) {
-        processor.requestRestore(block);
+        try {
+          writer.restoreBlock(block);
+          processor.requestRestore(block);
+        } catch (Exception e) {
+          LOG.error("Unknown error while trying to restore block " + block, e);
+        }
       }
     }
+    writer.completeRestoreAll();
   }
 
-  private void backupAll(ExtendedBlockEnum<Addresses> nnEnum) throws Exception {
+  private void backupAll(BackReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum) throws Exception {
+    writer.startBackupAll();
     List<ExtendedBlockWithAddress> batch = new ArrayList<>();
     if (nnEnum.current() != null) {
-      backupBlock(batch, nnEnum);
+      backupBlock(writer, batch, nnEnum);
     }
     while (nnEnum.next() != null) {
-      backupBlock(batch, nnEnum);
+      backupBlock(writer, batch, nnEnum);
     }
     if (batch.size() > 0) {
+      writer.backupRequestBatch(batch);
       writeBackupRequests(batch);
       batch.clear();
     }
+    writer.completeBackupAll();
   }
 
-  private void backupBlock(List<ExtendedBlockWithAddress> batch, ExtendedBlockEnum<Addresses> nnEnum) throws Exception {
+  private void backupBlock(BackReportWriter writer, List<ExtendedBlockWithAddress> batch,
+      ExtendedBlockEnum<Addresses> nnEnum) {
     if (batch.size() >= batchSize) {
       writeBackupRequests(batch);
       batch.clear();
@@ -238,16 +282,24 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     batch.add(new ExtendedBlockWithAddress(nnEnum.current(), nnEnum.currentValue()));
   }
 
-  private void writeBackupRequests(List<ExtendedBlockWithAddress> batch) throws Exception {
+  private void writeBackupRequests(List<ExtendedBlockWithAddress> batch) {
     for (ExtendedBlockWithAddress extendedBlockWithAddress : batch) {
       LOG.info("Backup block request {}", extendedBlockWithAddress.getExtendedBlock());
-      InetSocketAddress dataNodeAddress = chooseOneAtRandom(extendedBlockWithAddress.getAddresses());
-      DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(dataNodeAddress, conf, ugi);
-      ExtendedBlock extendedBlock = extendedBlockWithAddress.getExtendedBlock();
-      backup.backupBlock(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
-          extendedBlock.getGenerationStamp());
+      Addresses addresses = extendedBlockWithAddress.getAddresses();
+      if (addresses == null || addresses.isEmpty()) {
+        LOG.info("Block not found on datanodes can not back up {}", extendedBlockWithAddress.getExtendedBlock());
+        continue;
+      }
+      InetSocketAddress dataNodeAddress = chooseOneAtRandom(addresses);
+      try {
+        DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(dataNodeAddress, conf, ugi);
+        ExtendedBlock extendedBlock = extendedBlockWithAddress.getExtendedBlock();
+        backup.backupBlock(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
+            extendedBlock.getGenerationStamp());
+      } catch (IOException | InterruptedException e) {
+        LOG.error("Unknown error while trying to request a backup " + extendedBlockWithAddress, e);
+      }
     }
-
   }
 
   private InetSocketAddress chooseOneAtRandom(Addresses address) {
@@ -257,7 +309,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     return new InetSocketAddress(ipAddrs[index], ipcPorts[index]);
   }
 
-  private ExternalExtendedBlockSort<NullWritable> fetchBlocksFromBackupStore() throws Exception {
+  private ExternalExtendedBlockSort<NullWritable> fetchBlocksFromBackupStore(BackReportWriter writer) throws Exception {
     Path sortDir = getLocalSort(BACKUPSTORE_SORT);
     ExternalExtendedBlockSort<NullWritable> backupBlocks = new ExternalExtendedBlockSort<NullWritable>(conf, sortDir,
         NullWritable.class);
@@ -270,7 +322,8 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     return backupBlocks;
   }
 
-  private ExternalExtendedBlockSort<Addresses> fetchBlocksFromNameNode() throws Exception {
+  private ExternalExtendedBlockSort<Addresses> fetchBlocksFromNameNode(BackReportWriter writer) throws Exception {
+    writer.startBlockMetaDataFetchFromNameNode();
     Path sortDir = getLocalSort(NAMENODE_SORT);
     ExternalExtendedBlockSort<Addresses> nameNodeBlocks = new ExternalExtendedBlockSort<Addresses>(conf, sortDir,
         Addresses.class);
@@ -291,6 +344,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
         nameNodeBlocks.add(extendedBlock, new Addresses(locations));
       }
     }
+    writer.completeBlockMetaDataFetchFromNameNode();
     return nameNodeBlocks;
   }
 
@@ -331,6 +385,10 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
     public Addresses() {
 
+    }
+
+    public boolean isEmpty() {
+      return ipAddrs == null || ipAddrs.length == 0;
     }
 
     public Addresses(String[] ipAddrs, int[] ipcPorts) {

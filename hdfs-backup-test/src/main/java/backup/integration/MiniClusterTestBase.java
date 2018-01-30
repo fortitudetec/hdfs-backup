@@ -26,8 +26,10 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -280,9 +282,9 @@ public abstract class MiniClusterTestBase {
       writeFile(fileSystem, new Path("/testing1.txt"));
       writeFile(fileSystem, new Path("/testing2.txt"));
       writeFile(fileSystem, new Path("/testing3.txt"));
-      Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+      Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
-      Set<ExtendedBlock> original = toSet(backupStore.getExtendedBlocks());
+      Set<ExtendedBlock> original = getLastGeneration(toSet(backupStore.getExtendedBlocks()));
       destroyOneBackupStoreBlock(backupStore);
 
       NameNode nameNode = hdfsCluster.getNameNode();
@@ -295,6 +297,14 @@ public abstract class MiniClusterTestBase {
 
       Set<ExtendedBlock> current = toSet(backupStore.getExtendedBlocks());
 
+      for (ExtendedBlock eb : original) {
+        System.out.println("ORIGINAL=" + eb);
+      }
+
+      for (ExtendedBlock eb : current) {
+        System.out.println("CURRENT=" + eb);
+      }
+
       assertEquals(original, current);
 
     } finally {
@@ -304,6 +314,20 @@ public abstract class MiniClusterTestBase {
       hdfsCluster.shutdown();
       destroyBackupStore(conf);
     }
+  }
+
+  private Set<ExtendedBlock> getLastGeneration(Set<ExtendedBlock> set) {
+    Map<Long, ExtendedBlock> map = new HashMap<>();
+    for (ExtendedBlock eb : set) {
+
+      System.out.println("EB=" + eb);
+
+      ExtendedBlock extendedBlock = map.get(eb.getBlockId());
+      if (extendedBlock == null || eb.getGenerationStamp() > extendedBlock.getGenerationStamp()) {
+        map.put(eb.getBlockId(), eb);
+      }
+    }
+    return new HashSet<>(map.values());
   }
 
   private void writeFile(DistributedFileSystem fileSystem, Path path) throws IOException, InterruptedException {
