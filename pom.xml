@@ -27,70 +27,12 @@
 		<module>classloader-util</module>
 	</modules>
 
-	<!--repositories>
+	<repositories>
 		<repository>
 			<id>cloudera</id>
 			<url>https://repository.cloudera.com/artifactory/cloudera-repos/</url>
 		</repository>
-	</repositories-->
-
-
-		<distributionManagement>
-			<repository>
-				<id>sigma-nexus</id>
-				<url>${env.SIGMA_TLD_REPO_URI}/repository/maven-releases</url>
-			</repository>
-			<snapshotRepository>
-				<id>sigma-nexus</id>
-				<url>${env.SIGMA_TLD_REPO_URI}/repository/maven-snapshots</url>
-			</snapshotRepository>
-		</distributionManagement>
-
-		<repositories>
-			<repository>
-				<id>sigma-nexus</id>
-				<url>${env.SIGMA_TLD_REPO_URI}/repository/maven-public</url>
-				<releases>
-					<enabled>true</enabled>
-				</releases>
-				<snapshots>
-					<enabled>true</enabled>
-				</snapshots>
-			</repository>
-			<repository>
-				<id>maven-central</id>
-				<url>${env.SIGMA_TLD_HTTP_CACHE_URI}/repository/maven-central</url>
-				<releases>
-					<enabled>true</enabled>
-				</releases>
-				<snapshots>
-					<enabled>true</enabled>
-				</snapshots>
-			</repository>
-			<repository>
-				<id>repository.cloudera.com</id>
-				<url>${env.SIGMA_TLD_HTTP_CACHE_URI}/repository/repository.cloudera.com/</url>
-				<releases>
-					<enabled>true</enabled>
-				</releases>
-				<snapshots>
-					<enabled>true</enabled>
-				</snapshots>
-			</repository>
-		</repositories>
-
-		<pluginRepositories>
-			<pluginRepository>
-				<id>maven-central</id>
-				<url>${env.SIGMA_TLD_HTTP_CACHE_URI}/repository/maven-central</url>
-				<releases>
-					<enabled>true</enabled>
-				</releases>
-				<snapshots>
-					<enabled>true</enabled>
-				</snapshots>
-			</pluginRepository>
-		</pluginRepositories>
+	</repositories>
 
 	<dependencyManagement>
 		<dependencies>
