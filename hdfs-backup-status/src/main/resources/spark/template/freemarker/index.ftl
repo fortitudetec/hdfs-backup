@@ -21,11 +21,18 @@
 <tr><th>Type</th><th>Counts</th></tr>
 <tr><th>Backup MB/s</th><td>${backupBytesPerSecond}</td></tr>
 <tr><th>Backup in Progress</th><td>${backupsInProgressCount}</td></tr>
-<tr><th>Backup Finalized Blocks Size</th><td>${finalizedBlocksSizeCount}</td></tr>
-<tr><th>Backup Future Checks Size</th><td>${futureChecksSizeCount}</td></tr>
 <tr><th>Restore Blocks</th><td>${restoreBlocks}</td></tr>
 <tr><th>Restore MB/s</th><td>${restoreBytesPerSecond}</td></tr>
 <tr><th>Restore in Progress</th><td>${restoresInProgressCount}</td></tr>
 </table>
+
+<h1>Backup Reports</h1>
+<table class="table table-nonfluid">
+<#list reportIds as reportId>
+<tr><td><a href="report/${reportId}">${reportId}</a></td></tr>
+</#list>
+</table>
+
+<input type="button" onclick="location.href='runreport';" value="Run Report" />
 </body>
 </html>

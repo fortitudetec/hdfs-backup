@@ -8,41 +8,19 @@ import org.apache.hadoop.io.Writable;
 
 public class BackupStats implements Writable {
 
-  private int finializedBlocksSizeCount;
-  private int futureChecksSizeCount;
   private int backupsInProgressCount;
   private double backupBytesPerSecond;
 
   @Override
   public void write(DataOutput out) throws IOException {
-    out.writeInt(finializedBlocksSizeCount);
-    out.writeInt(futureChecksSizeCount);
     out.writeInt(backupsInProgressCount);
     out.writeDouble(backupBytesPerSecond);
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
-    finializedBlocksSizeCount = in.readInt();
-    futureChecksSizeCount = in.readInt();
     backupsInProgressCount = in.readInt();
     backupBytesPerSecond = in.readDouble();
-  }
-
-  public int getFinializedBlocksSizeCount() {
-    return finializedBlocksSizeCount;
-  }
-
-  public void setFinializedBlocksSizeCount(int finializedBlocksSizeCount) {
-    this.finializedBlocksSizeCount = finializedBlocksSizeCount;
-  }
-
-  public int getFutureChecksSizeCount() {
-    return futureChecksSizeCount;
-  }
-
-  public void setFutureChecksSizeCount(int futureChecksSizeCount) {
-    this.futureChecksSizeCount = futureChecksSizeCount;
   }
 
   public int getBackupsInProgressCount() {

@@ -6,17 +6,17 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 
 import backup.store.ExtendedBlock;
 
-public class BackupReportWriterToHdfs implements BackReportWriter {
+public class BackupReportWriterToFileSystem implements BackupReportWriter {
 
   private static final String YYYYMMDDHHMMSS = "YYYYMMddHHmmss";
   private final PrintWriter _output;
 
-  public BackupReportWriterToHdfs(DistributedFileSystem fileSystem, Path path) throws IOException {
+  public BackupReportWriterToFileSystem(FileSystem fileSystem, Path path) throws IOException {
     fileSystem.mkdirs(path);
     SimpleDateFormat format = new SimpleDateFormat(YYYYMMDDHHMMSS);
     String timestamp = format.format(new Date());

@@ -5,7 +5,7 @@ import java.util.List;
 
 import backup.store.ExtendedBlock;
 
-public interface BackReportWriter extends Closeable {
+public interface BackupReportWriter extends Closeable {
 
   void start();
 

@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
@@ -69,6 +70,10 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);
     blockCheck = new NameNodeBackupBlockCheckProcessor(conf, this, namenode, ugi);
     start();
+  }
+
+  public Path getReportPath() {
+    return blockCheck.getReportPath();
   }
 
   @Override
@@ -141,6 +146,10 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     } catch (Exception e) {
       throw new IOException(e);
     }
+  }
+
+  public void runReport() {
+    blockCheck.runReport();
   }
 
 }

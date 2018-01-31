@@ -27,6 +27,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -56,8 +57,8 @@ import org.slf4j.LoggerFactory;
 
 import backup.BaseProcessor;
 import backup.datanode.ipc.DataNodeBackupRPC;
-import backup.namenode.report.BackReportWriter;
-import backup.namenode.report.LoggerBackupReportWriter;
+import backup.namenode.report.BackupReportWriter;
+import backup.namenode.report.BackupReportWriterToFileSystem;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
@@ -66,8 +67,7 @@ import backup.store.ExternalExtendedBlockSort;
 
 public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
-  // private static final String USER_HDFS_BACKUP_REPORTS =
-  // "/user/hdfs/.backup/reports";
+  private static final String DFS_NAMENODE_NAME_DIR = "dfs.namenode.name.dir";
 
   private final static Logger LOG = LoggerFactory.getLogger(NameNodeBackupBlockCheckProcessor.class);
 
@@ -83,10 +83,13 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private final int batchSize;
   private final NameNode namenode;
   private final UserGroupInformation ugi;
-  // private final Path _reportPath = new Path(USER_HDFS_BACKUP_REPORTS);
+  private final Path _reportPath;
 
   public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor, NameNode namenode,
       UserGroupInformation ugi) throws Exception {
+    String[] nnStorageLocations = conf.getStrings(DFS_NAMENODE_NAME_DIR);
+    _reportPath = new Path(new Path(new Path(new URI(nnStorageLocations[0])), ".backup"), "reports");
+
     this.ugi = ugi;
     this.namenode = namenode;
     this.conf = conf;
@@ -101,9 +104,12 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     start();
   }
 
-  public void runBlockCheck() throws Exception {
-    // new BackupReportWriterToHdfs(fileSystem, _reportPath)
-    try (BackReportWriter writer = new LoggerBackupReportWriter()) {
+  public Path getReportPath() {
+    return _reportPath;
+  }
+
+  public synchronized void runBlockCheck() throws Exception {
+    try (BackupReportWriter writer = getBackupReportWriter()) {
       LOG.info("Starting backup block report.");
       writer.start();
       ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode(writer);
@@ -130,8 +136,12 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
+  private BackupReportWriter getBackupReportWriter() throws IOException {
+    return new BackupReportWriterToFileSystem(FileSystem.getLocal(conf), _reportPath);
+  }
+
   private void checkBlockPool(String blockPoolId, ExternalExtendedBlockSort<Addresses> nameNodeBlocks,
-      ExternalExtendedBlockSort<NullWritable> backupBlocks, BackReportWriter writer) throws Exception {
+      ExternalExtendedBlockSort<NullWritable> backupBlocks, BackupReportWriter writer) throws Exception {
     LOG.info("Backup block report for block pool {}.", blockPoolId);
     ExtendedBlockEnum<Addresses> nnEnum = null;
     ExtendedBlockEnum<NullWritable> buEnum = null;
@@ -151,7 +161,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void checkAllBlocks(BackReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum,
+  private void checkAllBlocks(BackupReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum,
       ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
     nnEnum.next();
     buEnum.next();
@@ -215,7 +225,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void deleteAllFromBackupStore(BackReportWriter writer, ExtendedBlockEnum<NullWritable> buEnum)
+  private void deleteAllFromBackupStore(BackupReportWriter writer, ExtendedBlockEnum<NullWritable> buEnum)
       throws Exception {
     ExtendedBlock block = buEnum.current();
     if (block != null) {
@@ -236,7 +246,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void restoreAll(BackReportWriter writer, ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
+  private void restoreAll(BackupReportWriter writer, ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
     writer.startRestoreAll();
     ExtendedBlock block;
     BlockManager blockManager = namenode.getNamesystem()
@@ -256,7 +266,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     writer.completeRestoreAll();
   }
 
-  private void backupAll(BackReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum) throws Exception {
+  private void backupAll(BackupReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum) throws Exception {
     writer.startBackupAll();
     List<ExtendedBlockWithAddress> batch = new ArrayList<>();
     if (nnEnum.current() != null) {
@@ -273,7 +283,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     writer.completeBackupAll();
   }
 
-  private void backupBlock(BackReportWriter writer, List<ExtendedBlockWithAddress> batch,
+  private void backupBlock(BackupReportWriter writer, List<ExtendedBlockWithAddress> batch,
       ExtendedBlockEnum<Addresses> nnEnum) {
     if (batch.size() >= batchSize) {
       writeBackupRequests(batch);
@@ -309,7 +319,8 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     return new InetSocketAddress(ipAddrs[index], ipcPorts[index]);
   }
 
-  private ExternalExtendedBlockSort<NullWritable> fetchBlocksFromBackupStore(BackReportWriter writer) throws Exception {
+  private ExternalExtendedBlockSort<NullWritable> fetchBlocksFromBackupStore(BackupReportWriter writer)
+      throws Exception {
     Path sortDir = getLocalSort(BACKUPSTORE_SORT);
     ExternalExtendedBlockSort<NullWritable> backupBlocks = new ExternalExtendedBlockSort<NullWritable>(conf, sortDir,
         NullWritable.class);
@@ -322,7 +333,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     return backupBlocks;
   }
 
-  private ExternalExtendedBlockSort<Addresses> fetchBlocksFromNameNode(BackReportWriter writer) throws Exception {
+  private ExternalExtendedBlockSort<Addresses> fetchBlocksFromNameNode(BackupReportWriter writer) throws Exception {
     writer.startBlockMetaDataFetchFromNameNode();
     Path sortDir = getLocalSort(NAMENODE_SORT);
     ExternalExtendedBlockSort<Addresses> nameNodeBlocks = new ExternalExtendedBlockSort<Addresses>(conf, sortDir,
@@ -465,6 +476,18 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       return addresses;
     }
 
+  }
+
+  public void runReport() {
+    Thread thread = new Thread(() -> {
+      try {
+        runBlockCheck();
+      } catch (Exception e) {
+        LOG.error("Unknown error", e);
+      }
+    });
+    thread.setDaemon(true);
+    thread.start();
   }
 
 }

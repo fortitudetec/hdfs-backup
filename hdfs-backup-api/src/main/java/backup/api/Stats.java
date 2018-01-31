@@ -2,10 +2,6 @@ package backup.api;
 
 public interface Stats {
 
-  int getFinalizedBlocksSizeCount();
-
-  int getFutureChecksSizeCount();
-
   int getBackupsInProgressCount();
 
   int getRestoreBlocks();

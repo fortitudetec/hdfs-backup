@@ -15,10 +15,6 @@ import backup.datanode.ipc.RestoreStats;
 public class StatsWritable implements Writable, Stats {
 
   @JsonProperty
-  private int finalizedBlocksSizeCount;
-  @JsonProperty
-  private int futureChecksSizeCount;
-  @JsonProperty
   private int backupsInProgressCount;
   @JsonProperty
   private double backupBytesPerSecond;
@@ -31,8 +27,6 @@ public class StatsWritable implements Writable, Stats {
 
   @Override
   public void write(DataOutput out) throws IOException {
-    out.writeInt(finalizedBlocksSizeCount);
-    out.writeInt(futureChecksSizeCount);
     out.writeInt(backupsInProgressCount);
     out.writeDouble(backupBytesPerSecond);
     out.writeInt(restoreBlocks);
@@ -42,8 +36,6 @@ public class StatsWritable implements Writable, Stats {
 
   @Override
   public void readFields(DataInput in) throws IOException {
-    finalizedBlocksSizeCount = in.readInt();
-    futureChecksSizeCount = in.readInt();
     backupsInProgressCount = in.readInt();
     backupBytesPerSecond = in.readDouble();
     restoreBlocks = in.readInt();
@@ -52,8 +44,6 @@ public class StatsWritable implements Writable, Stats {
   }
 
   public void add(BackupStats backupStats) {
-    finalizedBlocksSizeCount += backupStats.getFinializedBlocksSizeCount();
-    futureChecksSizeCount += backupStats.getFutureChecksSizeCount();
     backupsInProgressCount += backupStats.getBackupsInProgressCount();
     backupBytesPerSecond += backupStats.getBackupBytesPerSecond();
   }
@@ -62,24 +52,6 @@ public class StatsWritable implements Writable, Stats {
     restoreBlocks += restoreStats.getRestoreBlocks();
     restoresInProgressCount += restoreStats.getRestoresInProgressCount();
     restoreBytesPerSecond += restoreStats.getRestoreBytesPerSecond();
-  }
-
-  @Override
-  public int getFinalizedBlocksSizeCount() {
-    return finalizedBlocksSizeCount;
-  }
-
-  public void setFinalizedBlocksSizeCount(int finalizedBlocksSizeCount) {
-    this.finalizedBlocksSizeCount = finalizedBlocksSizeCount;
-  }
-
-  @Override
-  public int getFutureChecksSizeCount() {
-    return futureChecksSizeCount;
-  }
-
-  public void setFutureChecksSizeCount(int futureChecksSizeCount) {
-    this.futureChecksSizeCount = futureChecksSizeCount;
   }
 
   @Override
@@ -129,8 +101,7 @@ public class StatsWritable implements Writable, Stats {
 
   @Override
   public String toString() {
-    return "Stats [finializedBlocksSizeCount=" + finalizedBlocksSizeCount + ", futureChecksSizeCount="
-        + futureChecksSizeCount + ", backupsInProgressCount=" + backupsInProgressCount + ", backupBytesPerSecond="
+    return "StatsWritable [backupsInProgressCount=" + backupsInProgressCount + ", backupBytesPerSecond="
         + backupBytesPerSecond + ", restoreBlocks=" + restoreBlocks + ", restoresInProgressCount="
         + restoresInProgressCount + ", restoreBytesPerSecond=" + restoreBytesPerSecond + "]";
   }

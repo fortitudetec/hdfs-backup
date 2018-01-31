@@ -188,19 +188,19 @@ public abstract class MiniClusterTestBase {
       MiniDFSCluster hdfsCluster = new MiniDFSCluster.Builder(conf).build();
       try {
         DistributedFileSystem fileSystem = hdfsCluster.getFileSystem();
-        for (int i = 0; i < 100; i++) {
-          writeFile(fileSystem, new Path("/testing." + i + ".txt"));
+        for (int i = 0; i < 5; i++) {
+          Path path = new Path("/testing." + i + ".txt");
+          System.out.println("Adding path " + path);
+          writeFile(fileSystem, path);
         }
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
         hdfsCluster.stopDataNode(0);
-        hdfsCluster.shutdownNameNodes();
 
         // Remove data
         FileUtils.deleteDirectory(new File(hdfsDir, "data"));
 
-        hdfsCluster.restartNameNodes();
         hdfsCluster.startDataNodes(conf, 1, true, null, null);
 
         NameNode nameNode = hdfsCluster.getNameNode();
@@ -240,7 +240,7 @@ public abstract class MiniClusterTestBase {
       writeFile(fileSystem, path);
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-      Set<ExtendedBlock> original = toSet(backupStore.getExtendedBlocks());
+      Set<ExtendedBlock> original = getLastGeneration(toSet(backupStore.getExtendedBlocks()));
       destroyBackupStoreBlocks(backupStore);
 
       NameNode nameNode = hdfsCluster.getNameNode();

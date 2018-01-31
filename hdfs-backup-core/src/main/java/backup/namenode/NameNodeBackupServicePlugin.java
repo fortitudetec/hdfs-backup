@@ -34,6 +34,10 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configured;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
@@ -44,10 +48,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 
 import backup.SingletonManager;
+import backup.api.BackupWebService;
 import backup.api.Stats;
-import backup.api.StatsService;
 import backup.datanode.ipc.DataNodeBackupRPC;
 import backup.namenode.ipc.StatsWritable;
 import backup.util.Closer;
@@ -63,9 +69,9 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
   private static final String TMP = "tmp-";
   private static final String JAVA_IO_TMPDIR = "java.io.tmpdir";
   private static final String HDFS_BACKUP_STATUS_RESOURCES_ZIP = "hdfs-backup-status-resources.zip";
-  private static final String BACKUP_STATUS_BACKUP_STATUS_SERVER = "backup.status.BackupStatusServer";
   private static final String HDFS_BACKUP_STATUS_RESOURCES_ZIP_PROP = "hdfs.backup.status.zip";
   private static final String HDFS_BACKUP_STATUS_RESOURCES_ZIP_ENV = "HDFS_BACKUP_STATUS_ZIP";
+  private static final String BACKUP_WEB_BACKUP_WEB_SERVER = "backup.web.BackupWebServer";
 
   private NameNodeRestoreProcessor restoreProcessor;
   private HttpServer httpServer;
@@ -98,16 +104,16 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
           ClassLoader contextClassLoader = Thread.currentThread()
                                                  .getContextClassLoader();
           try {
-            StatsService<Stats> stats = getStatsService(ugi, blockManager);
+            BackupWebService<Stats> stats = getBackupWebService(ugi, blockManager, restoreProcessor);
 
             // Have to setup classloader in thread context to get the static
             // files in the http server tp be setup correctly.
             Thread.currentThread()
                   .setContextClassLoader(classLoader);
-            Class<?> backupStatusServerClass = classLoader.loadClass(BACKUP_STATUS_BACKUP_STATUS_SERVER);
+            Class<?> backupStatusServerClass = classLoader.loadClass(BACKUP_WEB_BACKUP_WEB_SERVER);
 
             Object server = DuckTypeUtil.newInstance(backupStatusServerClass,
-                new Class[] { Integer.TYPE, StatsService.class }, new Object[] { httpPort, stats });
+                new Class[] { Integer.TYPE, BackupWebService.class }, new Object[] { httpPort, stats });
             httpServer = DuckTypeUtil.wrap(HttpServer.class, server);
             httpServer.start();
             LOG.info("NameNode Backup HTTP listening on {}", httpPort);
@@ -124,8 +130,11 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     }
   }
 
-  private StatsService<Stats> getStatsService(UserGroupInformation ugi, BlockManager blockManager) {
-    return new StatsService<Stats>() {
+  private BackupWebService<Stats> getBackupWebService(UserGroupInformation ugi, BlockManager blockManager,
+      NameNodeRestoreProcessor restoreProcessor) throws IOException {
+    Path reportPath = restoreProcessor.getReportPath();
+    FileSystem fileSystem = reportPath.getFileSystem(getConf());
+    return new BackupWebService<Stats>() {
       @Override
       public StatsWritable getStats() throws IOException {
         StatsWritable stats = new StatsWritable();
@@ -141,6 +150,36 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
           }
         }
         return stats;
+      }
+
+      @Override
+      public void runReport() throws IOException {
+        restoreProcessor.runReport();
+      }
+
+      @Override
+      public List<String> listReports() throws IOException {
+        Builder<String> builder = ImmutableList.builder();
+        if (fileSystem.exists(reportPath)) {
+          FileStatus[] listStatus = fileSystem.listStatus(reportPath, (PathFilter) path -> path.getName()
+                                                                                               .startsWith("report."));
+          if (listStatus != null) {
+            for (FileStatus fileStatus : listStatus) {
+              builder.add(fileStatus.getPath()
+                                    .getName());
+            }
+          }
+        }
+        return builder.build();
+      }
+
+      @Override
+      public InputStream getReport(String id) throws IOException {
+        Path path = new Path(reportPath, id);
+        if (fileSystem.exists(reportPath)) {
+          return fileSystem.open(path);
+        }
+        return null;
       }
     };
   }

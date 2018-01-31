@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import backup.store.ExtendedBlock;
 
-public class LoggerBackupReportWriter implements BackReportWriter {
+public class LoggerBackupReportWriter implements BackupReportWriter {
 
   private static final Logger LOG = LoggerFactory.getLogger(LoggerBackupReportWriter.class);
 

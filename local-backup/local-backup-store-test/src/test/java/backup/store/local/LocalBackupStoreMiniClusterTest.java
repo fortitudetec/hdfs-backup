@@ -49,9 +49,4 @@ public class LocalBackupStoreMiniClusterTest extends MiniClusterTestBase {
     return "1.0-SNAPSHOT";
   }
 
-  @Override
-  public void testIntegrationBasicFullRestoreFromShutdown() throws Exception {
-    super.testIntegrationBasicFullRestoreFromShutdown();
-  }
-
 }

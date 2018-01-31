@@ -36,23 +36,11 @@ public class BackupConstants {
 
   public static final String DFS_DATANODE_BACKUP_FSDATASET_FACTORY_KEY = "dfs.datanode.backup.fsdataset.factory";
 
-  public static final String DFS_BACKUP_DATANODE_CHECK_POLL_TIME_KEY = "dfs.backup.datanode.block.check.poll.time";
-  public static final long DFS_BACKUP_DATANODE_CHECK_POLL_TIME_DEFAULT = TimeUnit.SECONDS.toMillis(10);
-
-  public static final String DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_KEY = "dfs.backup.datanode.backup.handler.count";
-  public static final int DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_DEFAULT = 10;
-
   public static final String DFS_BACKUP_DATANODE_RESTORE_BLOCK_HANDLER_COUNT_KEY = "dfs.backup.datanode.restore.handler.count";
   public static final int DFS_BACKUP_DATANODE_RESTORE_BLOCK_HANDLER_COUNT_DEFAULT = 10;
 
   public static final String DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_KEY = "dfs.backup.datanode.restore.error.pause";
   public static final long DFS_BACKUP_DATANODE_RESTORE_ERROR_PAUSE_DEFAULT = TimeUnit.SECONDS.toMillis(3);
-
-  public static final String DFS_BACKUP_DATANODE_BACKUP_ERROR_PAUSE_KEY = "dfs.backup.datanode.backup.error.pause";
-  public static final long DFS_BACKUP_DATANODE_BACKUP_ERROR_PAUSE_DEFAULT = TimeUnit.SECONDS.toMillis(3);
-
-  public static final String DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY = "dfs.backup.namenode.missing.blocks.poll.time";
-  public static final long DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT = TimeUnit.SECONDS.toMillis(10);
 
   public static final String DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_KEY = "dfs.backup.namenode.block.check.interval";
   public static final long DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DEFAULT = TimeUnit.HOURS.toMillis(3);
@@ -70,5 +58,8 @@ public class BackupConstants {
 
   public static final String DFS_BACKUP_NAMENODE_HTTP_PORT_KEY = "dfs.backup.namenode.http.port";
   public static final int DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT = 50890;
+
+  public static final String DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY = "dfs.backup.namenode.missing.blocks.poll.time";
+  public static final long DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT = TimeUnit.SECONDS.toMillis(10);
 
 }

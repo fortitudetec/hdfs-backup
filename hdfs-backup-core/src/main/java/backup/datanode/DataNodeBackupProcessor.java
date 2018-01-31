@@ -15,29 +15,13 @@
  */
 package backup.datanode;
 
-import static backup.BackupConstants.DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_DEFAULT;
-import static backup.BackupConstants.DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_KEY;
-import static backup.BackupConstants.DFS_BACKUP_DATANODE_BACKUP_ERROR_PAUSE_DEFAULT;
-import static backup.BackupConstants.DFS_BACKUP_DATANODE_BACKUP_ERROR_PAUSE_KEY;
-import static backup.BackupConstants.DFS_BACKUP_DATANODE_CHECK_POLL_TIME_DEFAULT;
-import static backup.BackupConstants.DFS_BACKUP_DATANODE_CHECK_POLL_TIME_KEY;
-import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT;
-import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY;
 import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY;
 import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY;
 import static backup.BackupConstants.LOCKS;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -45,13 +29,10 @@ import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
-import org.apache.hadoop.hdfs.server.datanode.ReplicaNotFoundException;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
-import backup.Executable;
 import backup.datanode.ipc.BackupStats;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
@@ -67,15 +48,9 @@ public class DataNodeBackupProcessor implements Closeable {
   private final static Logger LOG = LoggerFactory.getLogger(DataNodeBackupProcessor.class);
 
   private final DataNode datanode;
-  private final BlockingQueue<ExtendedBlock> finializedBlocks = new LinkedBlockingQueue<>();
   private final BackupStore backupStore;
   private final ZooKeeperClient zooKeeper;
   private final ZooKeeperLockManager lockManager;
-  private final long pollTime;
-  private final ExecutorService executorService;
-  private final BlockingQueue<FutureExtendedBlockCheck> futureChecks = new LinkedBlockingQueue<>();
-  private final long checkTimeDelay;
-  private final int maxBlocksToCheck = 100;
   private final Closer closer;
   private final AtomicBoolean running = new AtomicBoolean(true);
   private final AtomicInteger backupsInProgress = new AtomicInteger();
@@ -84,20 +59,7 @@ public class DataNodeBackupProcessor implements Closeable {
   public DataNodeBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
     this.closer = Closer.create();
     this.datanode = datanode;
-    pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
-        DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);
-    checkTimeDelay = conf.getLong(DFS_BACKUP_DATANODE_CHECK_POLL_TIME_KEY, DFS_BACKUP_DATANODE_CHECK_POLL_TIME_DEFAULT);
-    int threads = conf.getInt(DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_KEY,
-        DFS_BACKUP_DATANODE_BACKUP_BLOCK_HANDLER_COUNT_DEFAULT);
-    long pauseOnError = conf.getLong(DFS_BACKUP_DATANODE_BACKUP_ERROR_PAUSE_KEY,
-        DFS_BACKUP_DATANODE_BACKUP_ERROR_PAUSE_DEFAULT);
-    executorService = Executors.newCachedThreadPool();
-    closer.register((Closeable) () -> executorService.shutdownNow());
     backupStore = closer.register(BackupStore.create(BackupUtil.convert(conf)));
-    executorService.submit(Executable.createDaemon(LOG, pauseOnError, running, () -> runFutureCheck()));
-    for (int t = 1; t < threads; t++) {
-      executorService.submit(Executable.createDaemon(LOG, pauseOnError, running, () -> backupBlocks()));
-    }
 
     int zkSessionTimeout = conf.getInt(DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY,
         DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT);
@@ -113,8 +75,6 @@ public class DataNodeBackupProcessor implements Closeable {
   public BackupStats getBackupStats() {
     BackupStats backupStats = new BackupStats();
     backupStats.setBackupsInProgressCount(backupsInProgress.get());
-    backupStats.setFinializedBlocksSizeCount(finializedBlocks.size());
-    backupStats.setFutureChecksSizeCount(futureChecks.size());
     backupStats.setBackupBytesPerSecond(bytesPerSecond.getCountPerSecond());
     return backupStats;
   }
@@ -122,40 +82,10 @@ public class DataNodeBackupProcessor implements Closeable {
   /**
    * This method can not fail or block or this could cause problems for the
    * datanode itself.
+   * 
+   * @throws Exception
    */
-  public void blockFinalized(ExtendedBlock extendedBlock) {
-    try {
-      finializedBlocks.put(extendedBlock);
-    } catch (InterruptedException e) {
-      LOG.error("error adding new block to internal work queue {}", extendedBlock);
-    }
-  }
-
-  @Override
-  public void close() {
-    running.set(false);
-    IOUtils.closeQuietly(closer);
-  }
-
-  /**
-   * If blocks are copied to backup store return true. Otherwise return false.
-   */
-  public void backupBlocks() throws Exception {
-    ExtendedBlock extendedBlock = finializedBlocks.take();
-    try {
-      backupBlock(extendedBlock);
-    } catch (Exception e) {
-      if (e instanceof ReplicaNotFoundException) {
-        Thread.sleep(TimeUnit.SECONDS.toMillis(1));
-      } else {
-        LOG.error("Unknown error", e);
-      }
-      // try again
-      finializedBlocks.put(extendedBlock);
-    }
-  }
-
-  public void backupBlock(ExtendedBlock extendedBlock) throws Exception {
+  public void blockFinalized(ExtendedBlock extendedBlock) throws Exception {
     if (backupStore.hasBlock(extendedBlock)) {
       LOG.info("block {} already backed up", extendedBlock);
       return;
@@ -181,71 +111,20 @@ public class DataNodeBackupProcessor implements Closeable {
         backupsInProgress.decrementAndGet();
         lockManager.unlock(blockId);
       }
-    } else {
-      // Another data node is likely copying block, but we should check block in
-      // the near future.
-      addToFutureChecks(extendedBlock);
     }
+  }
+
+  @Override
+  public void close() {
+    running.set(false);
+    IOUtils.closeQuietly(closer);
   }
 
   private InputStream trackThroughPut(InputStream input) {
     return new ThroughPutInputStream(input, bytesPerSecond.getCounter());
   }
 
-  private void addToFutureChecks(ExtendedBlock extendedBlock) {
-    futureChecks.add(new FutureExtendedBlockCheck(getFutureCheckTime(), extendedBlock));
-  }
+  public void createRbw(ExtendedBlock eb) {
 
-  private long getFutureCheckTime() {
-    return System.currentTimeMillis() + checkTimeDelay;
-  }
-
-  private void runFutureCheck() throws Exception {
-    FutureExtendedBlockCheck check = futureChecks.peek();
-    if (check == null || !check.needsToBeChecked()) {
-      Thread.sleep(pollTime);
-      return;
-    }
-    List<FutureExtendedBlockCheck> checks = new ArrayList<>();
-    futureChecks.drainTo(checks, maxBlocksToCheck);
-    for (FutureExtendedBlockCheck futureExtendedBlockCheck : checks) {
-      backupBlock(futureExtendedBlockCheck.block);
-    }
-  }
-
-  public boolean tryToBackupBlocksAgain(List<ExtendedBlock> blocks) throws Exception {
-    FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
-    boolean backupOccured = false;
-    for (ExtendedBlock extendedBlock : blocks) {
-      if (fsDataset.getVolume(BackupUtil.toHadoop(extendedBlock)) != null) {
-        // This datanode has the block
-        backupBlock(extendedBlock);
-        backupOccured = true;
-      }
-    }
-    return backupOccured;
-  }
-
-  public void addToBackupQueue(ExtendedBlock extendedBlock) throws IOException {
-    try {
-      finializedBlocks.put(extendedBlock);
-    } catch (InterruptedException e) {
-      LOG.error("error adding new block to internal work queue {}", extendedBlock);
-      throw new IOException(e);
-    }
-  }
-
-  static class FutureExtendedBlockCheck {
-    final long checkTime;
-    final ExtendedBlock block;
-
-    FutureExtendedBlockCheck(long checkTime, ExtendedBlock block) {
-      this.checkTime = checkTime;
-      this.block = block;
-    }
-
-    boolean needsToBeChecked() {
-      return System.currentTimeMillis() >= checkTime;
-    }
   }
 }
