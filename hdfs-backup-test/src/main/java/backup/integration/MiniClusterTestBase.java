@@ -81,6 +81,7 @@ import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
 import backup.zookeeper.ZkUtils;
 import backup.zookeeper.ZooKeeperClient;
+import backup.zookeeper.ZooKeeperClientFactory;
 
 public abstract class MiniClusterTestBase {
 
@@ -404,8 +405,9 @@ public abstract class MiniClusterTestBase {
   }
 
   public static void rmrZk(String zkConnection, String path) throws Exception {
-    try (ZooKeeperClient zooKeeper = ZkUtils.newZooKeeper(zkConnection, 30000)) {
-      ZkUtils.rmr(zooKeeper, path);
+    try (ZooKeeperClientFactory zkcf = ZkUtils.newZooKeeperClientFactory(zkConnection, 30000)) {
+      ZooKeeperClient zk = zkcf.getZk();
+      ZkUtils.rmr(zk, path);
     }
   }
 
