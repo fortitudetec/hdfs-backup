@@ -85,7 +85,6 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
 
   static class BackupInvocationHandler implements InvocationHandler {
 
-    private static final String CREATE_RBW = "createRbw";
     private final FsDatasetSpi<?> datasetSpi;
     private final DataNodeBackupProcessor backupProcessor;
 
@@ -103,10 +102,6 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
           ExtendedBlock extendedBlock = (ExtendedBlock) args[0];
           backup.store.ExtendedBlock eb = BackupUtil.fromHadoop(extendedBlock);
           backupProcessor.blockFinalized(eb);
-        } else if (name.equals(CREATE_RBW)) {
-          ExtendedBlock extendedBlock = (ExtendedBlock) args[1];
-          backup.store.ExtendedBlock eb = BackupUtil.fromHadoop(extendedBlock);
-          backupProcessor.createRbw(eb);
         }
         return result;
       } catch (InvocationTargetException e) {

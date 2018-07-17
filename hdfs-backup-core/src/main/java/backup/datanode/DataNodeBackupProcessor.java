@@ -124,7 +124,4 @@ public class DataNodeBackupProcessor implements Closeable {
     return new ThroughPutInputStream(input, bytesPerSecond.getCounter());
   }
 
-  public void createRbw(ExtendedBlock eb) {
-
-  }
 }
