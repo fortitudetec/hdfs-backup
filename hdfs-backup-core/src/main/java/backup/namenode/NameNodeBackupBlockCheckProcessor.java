@@ -25,6 +25,7 @@ import static backup.BackupConstants.DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY;
 
 import java.io.DataInput;
 import java.io.DataOutput;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -343,22 +344,26 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     ExternalExtendedBlockSort<Addresses> nameNodeBlocks = new ExternalExtendedBlockSort<Addresses>(conf, sortDir,
         Addresses.class);
 
-    RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(new Path("/"), true);
+    Path path = new Path("/");
+    // Add normal files
+    addExtendedBlocksFromNameNode(nameNodeBlocks, path);
+    // Add snapshot dirs
+    SnapshottableDirectoryStatus[] snapshottableDirListing = fileSystem.getSnapshottableDirListing();
+    for (SnapshottableDirectoryStatus status : snapshottableDirListing) {
+      addExtendedBlocksFromNameNode(nameNodeBlocks, new Path(status.getFullPath(), SNAPSHOT));
+    }
+    writer.completeBlockMetaDataFetchFromNameNode();
+    return nameNodeBlocks;
+  }
+
+  private void addExtendedBlocksFromNameNode(ExternalExtendedBlockSort<Addresses> nameNodeBlocks, Path path)
+      throws FileNotFoundException, IOException {
+    RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(path, true);
     DFSClient client = fileSystem.getClient();
     while (iterator.hasNext()) {
       FileStatus fs = iterator.next();
       addExtendedBlocksFromNameNode(nameNodeBlocks, client, fs);
     }
-    SnapshottableDirectoryStatus[] snapshottableDirListing = fileSystem.getSnapshottableDirListing();
-    for (SnapshottableDirectoryStatus status : snapshottableDirListing) {
-      Path p = new Path(status.getFullPath(), SNAPSHOT);
-      FileStatus[] listStatus = fileSystem.listStatus(p);
-      for (FileStatus fs : listStatus) {
-        addExtendedBlocksFromNameNode(nameNodeBlocks, client, fs);
-      }
-    }
-    writer.completeBlockMetaDataFetchFromNameNode();
-    return nameNodeBlocks;
   }
 
   private void addExtendedBlocksFromNameNode(ExternalExtendedBlockSort<Addresses> nameNodeBlocks, DFSClient client,
