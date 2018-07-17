@@ -146,7 +146,9 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   }
 
   private BackupReportWriter getBackupReportWriter() throws IOException {
-    return new BackupReportWriterToFileSystem(FileSystem.getLocal(conf), _reportPath);
+    FileSystem fs = FileSystem.getLocal(conf)
+                              .getRawFileSystem();
+    return new BackupReportWriterToFileSystem(fs, _reportPath);
   }
 
   private void checkBlockPool(String blockPoolId, ExternalExtendedBlockSort<Addresses> nameNodeBlocks,
