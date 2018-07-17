@@ -92,7 +92,12 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor, NameNode namenode,
       UserGroupInformation ugi) throws Exception {
     String[] nnStorageLocations = conf.getStrings(DFS_NAMENODE_NAME_DIR);
-    _reportPath = new Path(new Path(new Path(new URI(nnStorageLocations[0])), ".backup"), "reports");
+    Path nnDataPath = new Path(new URI(nnStorageLocations[0]));
+    _reportPath = new Path(nnDataPath.getParent(), "backup-reports");
+    FileSystem fs = _reportPath.getFileSystem(conf);
+    if (!fs.exists(nnDataPath)) {
+      throw new IOException("Report path " + _reportPath + " does not exist");
+    }
 
     this.ugi = ugi;
     this.namenode = namenode;
