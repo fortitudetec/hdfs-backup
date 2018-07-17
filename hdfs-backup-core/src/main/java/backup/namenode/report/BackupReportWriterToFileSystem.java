@@ -15,6 +15,7 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import backup.namenode.NameNodeBackupBlockCheckProcessor.ExtendedBlockWithAddress;
 import backup.store.ExtendedBlock;
 
 public class BackupReportWriterToFileSystem implements BackupReportWriter {
@@ -131,8 +132,23 @@ public class BackupReportWriterToFileSystem implements BackupReportWriter {
   }
 
   @Override
-  public void deleteBackupBlock(ExtendedBlock bu) {
-    _output.println("deleteBackupBlock " + bu);
+  public void deleteBackupBlock(ExtendedBlock block) {
+    _output.println("deleteBackupBlock " + block);
+  }
+
+  @Override
+  public void deleteBackupBlockError(ExtendedBlock block) {
+    _output.println("deleteBackupBlockError " + block);
+  }
+
+  @Override
+  public void restoreBlockError(ExtendedBlock block) {
+    _output.println("restoreBlockError " + block);
+  }
+
+  @Override
+  public void backupRequestError(ExtendedBlockWithAddress extendedBlockWithAddress) {
+    _output.println("backupRequestError " + extendedBlockWithAddress);
   }
 
   @Override

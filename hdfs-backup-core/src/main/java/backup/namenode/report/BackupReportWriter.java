@@ -3,6 +3,7 @@ package backup.namenode.report;
 import java.io.Closeable;
 import java.util.List;
 
+import backup.namenode.NameNodeBackupBlockCheckProcessor.ExtendedBlockWithAddress;
 import backup.store.ExtendedBlock;
 
 public interface BackupReportWriter extends Closeable {
@@ -31,6 +32,12 @@ public interface BackupReportWriter extends Closeable {
 
   void backupRequestBatch(List<?> batch);
 
-  void deleteBackupBlock(ExtendedBlock bu);
+  void deleteBackupBlock(ExtendedBlock block);
+
+  void deleteBackupBlockError(ExtendedBlock block);
+
+  void restoreBlockError(ExtendedBlock block);
+
+  void backupRequestError(ExtendedBlockWithAddress extendedBlockWithAddress);
 
 }

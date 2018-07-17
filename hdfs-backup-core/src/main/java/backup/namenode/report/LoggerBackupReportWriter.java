@@ -6,6 +6,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import backup.namenode.NameNodeBackupBlockCheckProcessor.ExtendedBlockWithAddress;
 import backup.store.ExtendedBlock;
 
 public class LoggerBackupReportWriter implements BackupReportWriter {
@@ -34,12 +35,12 @@ public class LoggerBackupReportWriter implements BackupReportWriter {
 
   @Override
   public void startBlockPoolCheck(String blockPoolId) {
-    LOG.info("startBlockPoolCheck " + blockPoolId);
+    LOG.info("startBlockPoolCheck {}", blockPoolId);
   }
 
   @Override
   public void completeBlockPoolCheck(String blockPoolId) {
-    LOG.info("completeBlockPoolCheck " + blockPoolId);
+    LOG.info("completeBlockPoolCheck {}", blockPoolId);
   }
 
   @Override
@@ -54,7 +55,7 @@ public class LoggerBackupReportWriter implements BackupReportWriter {
 
   @Override
   public void restoreBlock(ExtendedBlock block) {
-    LOG.info("restoreBlock " + block);
+    LOG.info("restoreBlock {}", block);
   }
 
   @Override
@@ -69,17 +70,31 @@ public class LoggerBackupReportWriter implements BackupReportWriter {
 
   @Override
   public void backupRequestBatch(List<?> batch) {
-    LOG.info("backupRequestBatch size " + batch.size());
+    LOG.info("backupRequestBatch size {}", batch.size());
   }
 
   @Override
-  public void deleteBackupBlock(ExtendedBlock bu) {
-    LOG.info("deleteBackupBlock " + bu);
+  public void deleteBackupBlock(ExtendedBlock block) {
+    LOG.info("deleteBackupBlock {}", block);
+  }
+
+  @Override
+  public void deleteBackupBlockError(ExtendedBlock block) {
+    LOG.info("deleteBackupBlockError {}", block);
+  }
+
+  @Override
+  public void restoreBlockError(ExtendedBlock block) {
+    LOG.info("restoreBlockError {}", block);
+  }
+
+  @Override
+  public void backupRequestError(ExtendedBlockWithAddress extendedBlockWithAddress) {
+    LOG.info("backupRequestError {}", extendedBlockWithAddress);
   }
 
   @Override
   public void close() throws IOException {
 
   }
-
 }

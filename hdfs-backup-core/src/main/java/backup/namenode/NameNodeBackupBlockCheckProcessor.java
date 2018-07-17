@@ -207,6 +207,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
             backupStore.deleteBlock(bu);
           } catch (Exception e) {
             LOG.error("Unknown error while trying to delete block " + bu, e);
+            writer.deleteBackupBlockError(bu);
           }
           backupBlock(writer, backupBatch, nnEnum);
           nnEnum.next();
@@ -224,6 +225,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
             backupStore.deleteBlock(bu);
           } catch (Exception e) {
             LOG.error("Unknown error while trying to delete block " + bu, e);
+            writer.deleteBackupBlockError(bu);
           }
           buEnum.next();
         }
@@ -245,6 +247,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
         backupStore.deleteBlock(block);
       } catch (Exception e) {
         LOG.error("Unknown error while trying to delete block " + block, e);
+        writer.deleteBackupBlockError(block);
       }
     }
     while ((block = buEnum.next()) != null) {
@@ -253,6 +256,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
         backupStore.deleteBlock(block);
       } catch (Exception e) {
         LOG.error("Unknown error while trying to delete block " + block, e);
+        writer.deleteBackupBlockError(block);
       }
     }
   }
@@ -271,6 +275,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
           processor.requestRestore(block);
         } catch (Exception e) {
           LOG.error("Unknown error while trying to restore block " + block, e);
+          writer.restoreBlockError(block);
         }
       }
     }
@@ -320,6 +325,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
             extendedBlock.getGenerationStamp());
       } catch (IOException | InterruptedException e) {
         LOG.error("Unknown error while trying to request a backup " + extendedBlockWithAddress, e);
+        writer.backupRequestError(extendedBlockWithAddress);
       }
     }
   }
@@ -503,6 +509,11 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
     public Addresses getAddresses() {
       return addresses;
+    }
+
+    @Override
+    public String toString() {
+      return "ExtendedBlockWithAddress [extendedBlock=" + extendedBlock + ", addresses=" + addresses + "]";
     }
 
   }
