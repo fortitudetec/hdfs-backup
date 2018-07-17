@@ -219,7 +219,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       }
     } finally {
       if (backupBatch.size() > 0) {
-        writeBackupRequests(backupBatch);
+        writeBackupRequests(writer, backupBatch);
         backupBatch.clear();
       }
     }
@@ -277,7 +277,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
     if (batch.size() > 0) {
       writer.backupRequestBatch(batch);
-      writeBackupRequests(batch);
+      writeBackupRequests(writer, batch);
       batch.clear();
     }
     writer.completeBackupAll();
@@ -286,13 +286,14 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private void backupBlock(BackupReportWriter writer, List<ExtendedBlockWithAddress> batch,
       ExtendedBlockEnum<Addresses> nnEnum) {
     if (batch.size() >= batchSize) {
-      writeBackupRequests(batch);
+      writeBackupRequests(writer, batch);
       batch.clear();
     }
     batch.add(new ExtendedBlockWithAddress(nnEnum.current(), nnEnum.currentValue()));
   }
 
-  private void writeBackupRequests(List<ExtendedBlockWithAddress> batch) {
+  private void writeBackupRequests(BackupReportWriter writer, List<ExtendedBlockWithAddress> batch) {
+    writer.backupRequestBatch(batch);
     for (ExtendedBlockWithAddress extendedBlockWithAddress : batch) {
       LOG.info("Backup block request {}", extendedBlockWithAddress.getExtendedBlock());
       Addresses addresses = extendedBlockWithAddress.getAddresses();
