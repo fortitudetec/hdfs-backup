@@ -30,6 +30,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
+import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +41,7 @@ import backup.store.ExtendedBlock;
 import backup.store.LengthInputStream;
 import backup.util.Closer;
 import backup.zookeeper.ZkUtils;
-import backup.zookeeper.ZooKeeperClient;
+import backup.zookeeper.ZooKeeperClientFactory;
 import backup.zookeeper.ZooKeeperLockManager;
 
 public class DataNodeBackupProcessor implements Closeable {
@@ -49,7 +50,7 @@ public class DataNodeBackupProcessor implements Closeable {
 
   private final DataNode datanode;
   private final BackupStore backupStore;
-  private final ZooKeeperClient zooKeeper;
+  private final ZooKeeperClientFactory zkcf;
   private final ZooKeeperLockManager lockManager;
   private final Closer closer;
   private final AtomicBoolean running = new AtomicBoolean(true);
@@ -67,9 +68,8 @@ public class DataNodeBackupProcessor implements Closeable {
     if (zkConnectionString == null) {
       throw new RuntimeException("ZooKeeper connection string missing [" + DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY + "].");
     }
-    zooKeeper = closer.register(ZkUtils.newZooKeeper(zkConnectionString, zkSessionTimeout));
-    ZkUtils.mkNodesStr(zooKeeper, ZkUtils.createPath(LOCKS));
-    lockManager = closer.register(new ZooKeeperLockManager(zooKeeper, ZkUtils.createPath(LOCKS)));
+    zkcf = closer.register(ZkUtils.newZooKeeperClientFactory(zkConnectionString, zkSessionTimeout));
+    lockManager = closer.register(new ZooKeeperLockManager(zkcf, LOCKS));
   }
 
   public BackupStats getBackupStats() {
@@ -85,31 +85,47 @@ public class DataNodeBackupProcessor implements Closeable {
    * 
    * @throws Exception
    */
-  public void blockFinalized(ExtendedBlock extendedBlock) throws Exception {
+  public void blockFinalized(boolean bypassLock, ExtendedBlock extendedBlock) throws Exception {
     if (backupStore.hasBlock(extendedBlock)) {
       LOG.info("block {} already backed up", extendedBlock);
       return;
     }
     String blockId = Long.toString(extendedBlock.getBlockId());
-    if (lockManager.tryToLock(blockId)) {
-      try {
-        backupsInProgress.incrementAndGet();
-        FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
-        org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
-
-        BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(heb);
-        long numBytes = blockLocalPathInfo.getNumBytes();
-        try (LengthInputStream data = new LengthInputStream(trackThroughPut(fsDataset.getBlockInputStream(heb, 0)),
-            numBytes)) {
-          org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta = fsDataset.getMetaDataInputStream(
-              heb);
-          try (LengthInputStream meta = new LengthInputStream(trackThroughPut(tmeta), tmeta.getLength())) {
-            backupStore.backupBlock(extendedBlock, data, meta);
+    try {
+      if (bypassLock) {
+        performBackup(extendedBlock, blockId);
+      } else {
+        try {
+          if (lockManager.tryToLock(blockId)) {
+            performBackup(extendedBlock, blockId);
           }
+        } finally {
+          backupsInProgress.decrementAndGet();
+          lockManager.unlock(blockId);
         }
-      } finally {
-        backupsInProgress.decrementAndGet();
-        lockManager.unlock(blockId);
+      }
+    } catch (Exception e) {
+      if (e instanceof KeeperException) {
+        LOG.warn("ZooKeeper error during backup of {} bypassing lock", blockId);
+        performBackup(extendedBlock, blockId);
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  private void performBackup(ExtendedBlock extendedBlock, String blockId) throws Exception {
+    backupsInProgress.incrementAndGet();
+    FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
+    org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
+
+    BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(heb);
+    long numBytes = blockLocalPathInfo.getNumBytes();
+    try (LengthInputStream data = new LengthInputStream(trackThroughPut(fsDataset.getBlockInputStream(heb, 0)),
+        numBytes)) {
+      org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta = fsDataset.getMetaDataInputStream(heb);
+      try (LengthInputStream meta = new LengthInputStream(trackThroughPut(tmeta), tmeta.getLength())) {
+        backupStore.backupBlock(extendedBlock, data, meta);
       }
     }
   }

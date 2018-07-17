@@ -34,7 +34,7 @@ public class DataNodeBackupRPCImpl implements DataNodeBackupRPC {
   @Override
   public void backupBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
     try {
-      backupProcessor.blockFinalized(new ExtendedBlock(poolId, blockId, length, generationStamp));
+      backupProcessor.blockFinalized(true, new ExtendedBlock(poolId, blockId, length, generationStamp));
     } catch (Exception e) {
       throw new IOException(e);
     }

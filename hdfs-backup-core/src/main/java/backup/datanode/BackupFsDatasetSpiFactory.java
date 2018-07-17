@@ -101,7 +101,7 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
         if (name.equals(FINALIZE_BLOCK)) {
           ExtendedBlock extendedBlock = (ExtendedBlock) args[0];
           backup.store.ExtendedBlock eb = BackupUtil.fromHadoop(extendedBlock);
-          backupProcessor.blockFinalized(eb);
+          backupProcessor.blockFinalized(false, eb);
         }
         return result;
       } catch (InvocationTargetException e) {

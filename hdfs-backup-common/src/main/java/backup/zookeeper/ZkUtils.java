@@ -1,23 +1,26 @@
-/*
- * Copyright 2016 Fortitude Technologies LLC
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
+package backup.zookeeper;
+
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- *     
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package backup.zookeeper;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
@@ -27,64 +30,61 @@ import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.ZooKeeper;
-import org.apache.zookeeper.data.Stat;
+import org.apache.zookeeper.common.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Joiner;
-
 public class ZkUtils {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ZkUtils.class);
+  private final static Logger LOGGER = LoggerFactory.getLogger(ZkUtils.class);
 
   public static final int ANY_VERSION = -1;
 
   public static class ConnectionWatcher implements Watcher {
-    private String zkConnectionString;
-    private int sessionTimeout;
+
+    private String _zkConnectionString;
+    private int _sessionTimeout;
 
     public void setZkConnectionString(String zkConnectionString) {
-      this.zkConnectionString = zkConnectionString;
+      _zkConnectionString = zkConnectionString;
     }
 
     public void setSessionTimeout(int sessionTimeout) {
-      this.sessionTimeout = sessionTimeout;
+      _sessionTimeout = sessionTimeout;
     }
 
     @Override
     public void process(WatchedEvent event) {
       KeeperState state = event.getState();
-      LOG.info("ZooKeeper [{}] timeout [{}] changed to [{}] state", zkConnectionString, sessionTimeout, state);
+      LOGGER.info("ZooKeeper {} timeout {} changed to {} state", _zkConnectionString, _sessionTimeout, state);
+    }
+
+  }
+
+  public static void sleep(Object o) {
+    try {
+      Thread.sleep(TimeUnit.SECONDS.toMillis(1));
+    } catch (InterruptedException e) {
+      return;
     }
   }
 
-  public static void pause(Object o) {
-    synchronized (o) {
-      try {
-        o.wait(TimeUnit.SECONDS.toMillis(1));
-      } catch (InterruptedException e) {
-        return;
+  public static ZooKeeperLockManager newZooKeeperLockManager(ZooKeeperClientFactory zk, String lockPath)
+      throws IOException {
+    return new ZooKeeperLockManager(zk, lockPath);
+  }
+
+  private static ZooKeeperClient newZooKeeper(String zkConnectionString, int sessionTimeout) throws IOException {
+    if (zkConnectionString.contains("/")) {
+      int indexOf = zkConnectionString.indexOf('/');
+      try (ZooKeeperClient zooKeeper = newZooKeeper(zkConnectionString.substring(0, indexOf), sessionTimeout)) {
+        mkNodesStr(zooKeeper, zkConnectionString.substring(indexOf));
       }
     }
-  }
-
-  public static ZooKeeperClient newZooKeeper(String zkConnectionString, int sessionTimeout) throws IOException {
     ConnectionWatcher watcher = new ConnectionWatcher();
     watcher.setSessionTimeout(sessionTimeout);
     watcher.setZkConnectionString(zkConnectionString);
-    createChrootPathIfNeeded(zkConnectionString, sessionTimeout, watcher);
     return new ZooKeeperClient(zkConnectionString, sessionTimeout, watcher);
-  }
-
-  private static void createChrootPathIfNeeded(String zkConnectionString, int sessionTimeout, ConnectionWatcher watcher)
-      throws IOException {
-    int indexOf = zkConnectionString.indexOf('/');
-    if (indexOf >= 0) {
-      String baseConnection = zkConnectionString.substring(0, indexOf);
-      try (ZooKeeperClient zk = new ZooKeeperClient(baseConnection, sessionTimeout, watcher)) {
-        ZkUtils.mkNodesStr(zk, zkConnectionString.substring(indexOf));
-      }
-    }
   }
 
   public static void mkNodesStr(ZooKeeper zk, String path) {
@@ -117,10 +117,10 @@ public class ZkUtils {
       } catch (NodeExistsException e) {
         // do nothing
       } catch (KeeperException e) {
-        LOG.error("error", e);
+        LOGGER.error("error", e);
         throw new RuntimeException(e);
       } catch (InterruptedException e) {
-        LOG.error("error", e);
+        LOGGER.error("error", e);
         throw new RuntimeException(e);
       }
     }
@@ -130,39 +130,16 @@ public class ZkUtils {
     return path.replace("//", "/");
   }
 
-  public static String createPath(String... parts) {
+  public static String getPath(String... parts) {
     if (parts == null || parts.length == 0) {
       return null;
     }
-    return "/" + trimSlash(Joiner.on('/').join(trimSlash(parts)));
-  }
-
-  private static String[] trimSlash(String[] parts) {
-    for (int i = 0; i < parts.length; i++) {
-      parts[i] = trimSlash(parts[i]);
+    StringBuilder builder = new StringBuilder(parts[0]);
+    for (int i = 1; i < parts.length; i++) {
+      builder.append('/');
+      builder.append(parts[i]);
     }
-    return parts;
-  }
-
-  private static String trimSlash(String s) {
-    int start = 0;
-    for (int c = 0; c < s.length(); c++) {
-      if (s.charAt(c) != '/') {
-        break;
-      }
-      start++;
-    }
-    if (start >= s.length()) {
-      return "";
-    }
-    int end = s.length();
-    for (int c = end - 1; c >= 0; c--) {
-      if (s.charAt(c) != '/') {
-        break;
-      }
-      end--;
-    }
-    return s.substring(start, end);
+    return builder.toString();
   }
 
   public static boolean exists(ZooKeeper zk, String... path) {
@@ -171,7 +148,8 @@ public class ZkUtils {
     }
     StringBuilder builder = new StringBuilder(path[0]);
     for (int i = 1; i < path.length; i++) {
-      builder.append('/').append(path[i]);
+      builder.append('/')
+             .append(path[i]);
     }
     try {
       return zk.exists(builder.toString(), false) != null;
@@ -199,45 +177,64 @@ public class ZkUtils {
     }
   }
 
-  public static void waitUntilExists(ZooKeeper zooKeeper, String path) {
-    final Object o = new Object();
-    try {
-      while (true) {
-        Stat stat = zooKeeper.exists(path, new Watcher() {
-          @Override
-          public void process(WatchedEvent event) {
-            synchronized (o) {
-              o.notifyAll();
-            }
-          }
-        });
-        if (stat == null) {
-          synchronized (o) {
-            o.wait();
-          }
-        } else {
-          return;
-        }
-      }
-    } catch (KeeperException e) {
-      throw new RuntimeException(e);
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  public static void rmr(ZooKeeper zooKeeper, String path) throws Exception {
-    if (zooKeeper.exists(path, false) == null) {
-      return;
-    }
+  public static void rmr(ZooKeeper zooKeeper, String path) throws KeeperException, InterruptedException {
     List<String> children = zooKeeper.getChildren(path, false);
-    for (String s : children) {
-      rmr(zooKeeper, (path + "/" + s).replace("//", "/"));
-    }
-    if (path.equals("/")) {
-      return;
+    for (String c : children) {
+      rmr(zooKeeper, path + "/" + c);
     }
     zooKeeper.delete(path, -1);
+  }
+
+  public static ZooKeeperClientFactory newZooKeeperClientFactory(String zkConnectionString, int sessionTimeout) {
+    AtomicReference<ZooKeeperClient> _ref = new AtomicReference<ZooKeeperClient>();
+    Thread thread = new Thread(() -> IOUtils.cleanup(LOGGER, _ref.get()));
+    Runtime runtime = Runtime.getRuntime();
+    ZooKeeperClientFactory zkcf = new ZooKeeperClientFactory() {
+
+      private final AtomicLong _age = new AtomicLong();
+
+      @Override
+      public synchronized ZooKeeperClient getZk() throws IOException {
+        ZooKeeperClient zk = _ref.get();
+        if (zk == null || zk.isExpired()) {
+          if (zk != null) {
+            zk.close();
+          }
+          _ref.set(zk = ZkUtils.newZooKeeper(zkConnectionString, sessionTimeout));
+          _age.set(System.nanoTime());
+        }
+        if (isClientOld()) {
+          _ref.set(zk = ZkUtils.reconnect(zk, zkConnectionString));
+          _age.set(System.nanoTime());
+        }
+        return zk;
+      }
+
+      private boolean isClientOld() {
+        return _age.get() + (sessionTimeout / 2) < System.nanoTime();
+      }
+
+      @Override
+      public void close() throws IOException {
+        IOUtils.cleanup(LOGGER, _ref.get());
+        runtime.removeShutdownHook(thread);
+      }
+    };
+
+    runtime.addShutdownHook(thread);
+    return zkcf;
+  }
+
+  protected static ZooKeeperClient reconnect(ZooKeeperClient zk, String zkConnectionString) throws IOException {
+    long sessionId = zk.getSessionId();
+    byte[] sessionPasswd = zk.getSessionPasswd();
+    int sessionTimeout = zk.getSessionTimeout();
+    ConnectionWatcher watcher = new ConnectionWatcher();
+    watcher.setSessionTimeout(sessionTimeout);
+    watcher.setZkConnectionString(zkConnectionString);
+    ZooKeeperClient newZk = new ZooKeeperClient(zkConnectionString, sessionTimeout, watcher, sessionId, sessionPasswd);
+    zk.disconnect();
+    return newZk;
   }
 
 }
