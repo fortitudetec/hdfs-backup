@@ -46,6 +46,7 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
+import org.apache.hadoop.hdfs.protocol.SnapshottableDirectoryStatus;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockCollection;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
@@ -66,6 +67,8 @@ import backup.store.ExtendedBlockEnum;
 import backup.store.ExternalExtendedBlockSort;
 
 public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
+
+  private static final String SNAPSHOT = ".snapshot";
 
   private static final String DFS_NAMENODE_NAME_DIR = "dfs.namenode.name.dir";
 
@@ -344,20 +347,33 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     DFSClient client = fileSystem.getClient();
     while (iterator.hasNext()) {
       FileStatus fs = iterator.next();
-      String src = fs.getPath()
-                     .toUri()
-                     .getPath();
-      long start = 0;
-      long length = fs.getLen();
-      LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
-      for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
-        DatanodeInfo[] locations = locatedBlock.getLocations();
-        ExtendedBlock extendedBlock = BackupUtil.fromHadoop(locatedBlock.getBlock());
-        nameNodeBlocks.add(extendedBlock, new Addresses(locations));
+      addExtendedBlocksFromNameNode(nameNodeBlocks, client, fs);
+    }
+    SnapshottableDirectoryStatus[] snapshottableDirListing = fileSystem.getSnapshottableDirListing();
+    for (SnapshottableDirectoryStatus status : snapshottableDirListing) {
+      Path p = new Path(status.getFullPath(), SNAPSHOT);
+      FileStatus[] listStatus = fileSystem.listStatus(p);
+      for (FileStatus fs : listStatus) {
+        addExtendedBlocksFromNameNode(nameNodeBlocks, client, fs);
       }
     }
     writer.completeBlockMetaDataFetchFromNameNode();
     return nameNodeBlocks;
+  }
+
+  private void addExtendedBlocksFromNameNode(ExternalExtendedBlockSort<Addresses> nameNodeBlocks, DFSClient client,
+      FileStatus fs) throws IOException {
+    String src = fs.getPath()
+                   .toUri()
+                   .getPath();
+    long start = 0;
+    long length = fs.getLen();
+    LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
+    for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
+      DatanodeInfo[] locations = locatedBlock.getLocations();
+      ExtendedBlock extendedBlock = BackupUtil.fromHadoop(locatedBlock.getBlock());
+      nameNodeBlocks.add(extendedBlock, new Addresses(locations));
+    }
   }
 
   private Path getLocalSort(String name) throws IOException {
