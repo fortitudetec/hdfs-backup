@@ -18,6 +18,7 @@ package backup.namenode;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -26,7 +27,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
@@ -72,7 +72,7 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     start();
   }
 
-  public Path getReportPath() {
+  public File getReportPath() {
     return blockCheck.getReportPath();
   }
 

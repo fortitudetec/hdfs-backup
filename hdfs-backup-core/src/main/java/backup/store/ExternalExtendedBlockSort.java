@@ -28,6 +28,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.SequenceFile.Reader;
@@ -41,30 +42,38 @@ public class ExternalExtendedBlockSort<T extends Writable> implements Closeable 
   public static void main(String[] args) throws Exception {
     Configuration conf = new Configuration();
     Path dir = new Path("file:///home/apm/Development/git-projects/hdfs-backup/hdfs-backup-core/tmp");
-    dir.getFileSystem(conf).delete(dir, true);
+    dir.getFileSystem(conf)
+       .delete(dir, true);
     long start = System.nanoTime();
-    try (ExternalExtendedBlockSort<NullWritable> sort = new ExternalExtendedBlockSort<NullWritable>(conf, dir,
-        NullWritable.class)) {
+    try (
+        ExternalExtendedBlockSort<LongWritable> sort = new ExternalExtendedBlockSort<>(conf, dir, LongWritable.class)) {
       Random random = new Random();
       for (int bp = 0; bp < 1; bp++) {
-        String bpid = UUID.randomUUID().toString();
+        String bpid = UUID.randomUUID()
+                          .toString();
         for (int i = 0; i < 10000000; i++) {
           // for (int i = 0; i < 10; i++) {
           long genstamp = random.nextInt(20000);
-          ExtendedBlock extendedBlock = new ExtendedBlock(bpid, random.nextLong(), random.nextInt(Integer.MAX_VALUE),
-              genstamp);
-          sort.add(extendedBlock, NullWritable.get());
+          long blockId = random.nextLong();
+          ExtendedBlock extendedBlock = new ExtendedBlock(bpid, blockId, random.nextInt(Integer.MAX_VALUE), genstamp);
+          sort.add(extendedBlock, new LongWritable(blockId));
         }
       }
-
+      System.out.println("finished");
       sort.finished();
+      System.out.println("interate");
       for (String blockPoolId : sort.getBlockPoolIds()) {
-        ExtendedBlockEnum<NullWritable> blockEnum = sort.getBlockEnum(blockPoolId);
+        ExtendedBlockEnum<LongWritable> blockEnum = sort.getBlockEnum(blockPoolId);
         ExtendedBlock block;
         long l = 0;
         while ((block = blockEnum.next()) != null) {
           // System.out.println(block);
-          l += block.getBlockId();
+          long blockId = block.getBlockId();
+          l += blockId;
+          LongWritable currentValue = blockEnum.currentValue();
+          if (currentValue.get() != blockId) {
+            System.err.println("Error " + blockId);
+          }
         }
         System.out.println(l);
       }
@@ -153,7 +162,8 @@ public class ExternalExtendedBlockSort<T extends Writable> implements Closeable 
       if (valueClass == NullWritable.class) {
         val = (T) NullWritable.get();
       } else {
-        val = (T) reader.getValueClass().newInstance();
+        val = (T) reader.getValueClass()
+                        .newInstance();
       }
       return val;
     }

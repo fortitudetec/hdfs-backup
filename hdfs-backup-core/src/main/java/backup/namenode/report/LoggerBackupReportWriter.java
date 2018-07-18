@@ -1,8 +1,10 @@
 package backup.namenode.report;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.List;
 
+import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,12 +91,23 @@ public class LoggerBackupReportWriter implements BackupReportWriter {
   }
 
   @Override
-  public void backupRequestError(ExtendedBlockWithAddress extendedBlockWithAddress) {
-    LOG.info("backupRequestError {}", extendedBlockWithAddress);
+  public void backupRequestError(InetSocketAddress dataNodeAddress, ExtendedBlockWithAddress extendedBlockWithAddress) {
+    LOG.info("backupRequestError {} {}", dataNodeAddress, extendedBlockWithAddress);
+  }
+
+  @Override
+  public void statusBlockMetaDataFetchFromNameNode(String src) {
+    LOG.info("statusBlockMetaDataFetchFromNameNode {}", src);
   }
 
   @Override
   public void close() throws IOException {
 
   }
+
+  @Override
+  public void statusExtendedBlocksFromNameNode(String src, ExtendedBlock extendedBlock, DatanodeInfo[] locations) {
+
+  }
+
 }

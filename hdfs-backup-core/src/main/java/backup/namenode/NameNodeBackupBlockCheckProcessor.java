@@ -25,14 +25,17 @@ import static backup.BackupConstants.DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY;
 
 import java.io.DataInput;
 import java.io.DataOutput;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -87,15 +90,15 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private final int batchSize;
   private final NameNode namenode;
   private final UserGroupInformation ugi;
-  private final Path _reportPath;
+  private final File _reportPath;
 
   public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor, NameNode namenode,
       UserGroupInformation ugi) throws Exception {
     String[] nnStorageLocations = conf.getStrings(DFS_NAMENODE_NAME_DIR);
-    Path nnDataPath = new Path(new URI(nnStorageLocations[0]));
-    _reportPath = new Path(nnDataPath.getParent(), "backup-reports");
-    FileSystem fs = _reportPath.getFileSystem(conf);
-    if (!fs.exists(nnDataPath)) {
+    URI uri = new URI(nnStorageLocations[0]);
+    _reportPath = new File(new File(uri.getPath()).getParent(), "backup-reports");
+    _reportPath.mkdirs();
+    if (!_reportPath.exists()) {
       throw new IOException("Report path " + _reportPath + " does not exist");
     }
 
@@ -113,7 +116,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     start();
   }
 
-  public Path getReportPath() {
+  public File getReportPath() {
     return _reportPath;
   }
 
@@ -146,9 +149,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   }
 
   private BackupReportWriter getBackupReportWriter() throws IOException {
-    FileSystem fs = FileSystem.getLocal(conf)
-                              .getRawFileSystem();
-    return new BackupReportWriterToFileSystem(fs, _reportPath);
+    return new BackupReportWriterToFileSystem(_reportPath);
   }
 
   private void checkBlockPool(String blockPoolId, ExternalExtendedBlockSort<Addresses> nameNodeBlocks,
@@ -325,7 +326,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
             extendedBlock.getGenerationStamp());
       } catch (IOException | InterruptedException e) {
         LOG.error("Unknown error while trying to request a backup " + extendedBlockWithAddress, e);
-        writer.backupRequestError(extendedBlockWithAddress);
+        writer.backupRequestError(dataNodeAddress, extendedBlockWithAddress);
       }
     }
   }
@@ -359,38 +360,47 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
     Path path = new Path("/");
     // Add normal files
-    addExtendedBlocksFromNameNode(nameNodeBlocks, path);
+    addExtendedBlocksFromNameNode(writer, nameNodeBlocks, path);
     // Add snapshot dirs
     SnapshottableDirectoryStatus[] snapshottableDirListing = fileSystem.getSnapshottableDirListing();
     for (SnapshottableDirectoryStatus status : snapshottableDirListing) {
-      addExtendedBlocksFromNameNode(nameNodeBlocks, new Path(status.getFullPath(), SNAPSHOT));
+      addExtendedBlocksFromNameNode(writer, nameNodeBlocks, new Path(status.getFullPath(), SNAPSHOT));
     }
     writer.completeBlockMetaDataFetchFromNameNode();
     return nameNodeBlocks;
   }
 
-  private void addExtendedBlocksFromNameNode(ExternalExtendedBlockSort<Addresses> nameNodeBlocks, Path path)
-      throws FileNotFoundException, IOException {
+  private void addExtendedBlocksFromNameNode(BackupReportWriter writer,
+      ExternalExtendedBlockSort<Addresses> nameNodeBlocks, Path path) throws FileNotFoundException, IOException {
     RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(path, true);
     DFSClient client = fileSystem.getClient();
+    long st = System.nanoTime();
     while (iterator.hasNext()) {
       FileStatus fs = iterator.next();
-      addExtendedBlocksFromNameNode(nameNodeBlocks, client, fs);
+      if (st + TimeUnit.SECONDS.toNanos(10) < System.nanoTime()) {
+        writer.statusBlockMetaDataFetchFromNameNode(fs.getPath()
+                                                      .toString());
+        st = System.nanoTime();
+      }
+      addExtendedBlocksFromNameNode(writer, nameNodeBlocks, client, fs);
     }
   }
 
-  private void addExtendedBlocksFromNameNode(ExternalExtendedBlockSort<Addresses> nameNodeBlocks, DFSClient client,
-      FileStatus fs) throws IOException {
+  private void addExtendedBlocksFromNameNode(BackupReportWriter writer,
+      ExternalExtendedBlockSort<Addresses> nameNodeBlocks, DFSClient client, FileStatus fs) throws IOException {
     String src = fs.getPath()
                    .toUri()
                    .getPath();
     long start = 0;
     long length = fs.getLen();
+
     LocatedBlocks locatedBlocks = client.getLocatedBlocks(src, start, length);
     for (LocatedBlock locatedBlock : locatedBlocks.getLocatedBlocks()) {
       DatanodeInfo[] locations = locatedBlock.getLocations();
       ExtendedBlock extendedBlock = BackupUtil.fromHadoop(locatedBlock.getBlock());
-      nameNodeBlocks.add(extendedBlock, new Addresses(locations));
+      Addresses addresses = new Addresses(locations);
+      nameNodeBlocks.add(extendedBlock, addresses);
+      writer.statusExtendedBlocksFromNameNode(src, extendedBlock, locations);
     }
   }
 
@@ -490,6 +500,11 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       for (int i = 0; i < ipcPorts.length; i++) {
         ipcPorts[i] = in.readInt();
       }
+    }
+
+    @Override
+    public String toString() {
+      return "Addresses [ipAddrs=" + Arrays.toString(ipAddrs) + ", ipcPorts=" + Arrays.toString(ipcPorts) + "]";
     }
 
   }

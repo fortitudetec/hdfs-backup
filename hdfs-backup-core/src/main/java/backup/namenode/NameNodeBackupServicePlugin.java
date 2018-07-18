@@ -34,10 +34,6 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configured;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
@@ -132,8 +128,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
 
   private BackupWebService<Stats> getBackupWebService(UserGroupInformation ugi, BlockManager blockManager,
       NameNodeRestoreProcessor restoreProcessor) throws IOException {
-    Path reportPath = restoreProcessor.getReportPath();
-    FileSystem fileSystem = reportPath.getFileSystem(getConf());
+    File reportPath = restoreProcessor.getReportPath();
     return new BackupWebService<Stats>() {
       @Override
       public StatsWritable getStats() throws IOException {
@@ -160,14 +155,13 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       @Override
       public List<String> listReports() throws IOException {
         Builder<String> builder = ImmutableList.builder();
-        if (fileSystem.exists(reportPath)) {
-          FileStatus[] listStatus = fileSystem.listStatus(reportPath, (PathFilter) path -> path.getName()
-                                                                                               .startsWith("report."));
-          if (listStatus != null) {
-            for (FileStatus fileStatus : listStatus) {
-              builder.add(fileStatus.getPath()
-                                    .getName());
-            }
+        if (!reportPath.exists()) {
+          return builder.build();
+        }
+        File[] list = reportPath.listFiles((dir, name) -> name.startsWith("report."));
+        if (list != null) {
+          for (File f : list) {
+            builder.add(f.getName());
           }
         }
         return builder.build();
@@ -175,9 +169,9 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
 
       @Override
       public InputStream getReport(String id) throws IOException {
-        Path path = new Path(reportPath, id);
-        if (fileSystem.exists(reportPath)) {
-          return fileSystem.open(path);
+        File file = new File(reportPath, id);
+        if (file.exists()) {
+          return new FileInputStream(file);
         }
         return null;
       }
