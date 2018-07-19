@@ -106,7 +106,17 @@ public class LoggerBackupReportWriter implements BackupReportWriter {
   }
 
   @Override
-  public void statusExtendedBlocksFromNameNode(String src, ExtendedBlock extendedBlock, DatanodeInfo[] locations) {
+  public void statusExtendedBlocksFromNameNode(String src, ExtendedBlock block, DatanodeInfo[] locations) {
+
+  }
+
+  @Override
+  public void statusExtendedBlocksFromBackStore(ExtendedBlock block) {
+
+  }
+
+  @Override
+  public void statusBlockMetaDataFetchFromBackStore(ExtendedBlock block) {
 
   }
 

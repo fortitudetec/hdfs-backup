@@ -7,7 +7,7 @@ import java.util.List;
 public interface BackupWebService<T extends Stats> {
   T getStats() throws IOException;
 
-  void runReport() throws IOException;
+  void runReport(boolean debug) throws IOException;
 
   List<String> listReports() throws IOException;
 

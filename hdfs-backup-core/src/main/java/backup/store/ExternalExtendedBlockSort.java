@@ -176,10 +176,15 @@ public class ExternalExtendedBlockSort<T extends Writable> implements Closeable 
     @Override
     public ExtendedBlock next() throws IOException {
       ComparableBlock block = new ComparableBlock();
-      if (reader.next(block, value)) {
-        return current = block.getExtendedBlock(blockPoolId);
-      } else {
-        return current = null;
+      while (true) {
+        if (reader.next(block, value)) {
+          ExtendedBlock extendedBlock = block.getExtendedBlock(blockPoolId);
+          if (!extendedBlock.equals(current)) {
+            return current = extendedBlock;
+          }
+        } else {
+          return current = null;
+        }
       }
     }
 

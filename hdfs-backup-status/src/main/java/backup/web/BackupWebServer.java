@@ -36,8 +36,8 @@ public class BackupWebServer {
   };
 
   public static void main(String[] args) {
-    BackupWebService<Stats> service = getBackupWebService();
-    BackupWebServer server = new BackupWebServer(9090, service);
+    BackupWebService<Stats> service = getBackupWebServiceTest();
+    BackupWebServer server = new BackupWebServer(9091, service);
     server.start();
   }
 
@@ -69,7 +69,12 @@ public class BackupWebServer {
     service.port(port);
     service.staticFileLocation("/hdfsbackupwebapp");
     service.get("/runreport", (Route) (request, response) -> {
-      bws.runReport();
+      bws.runReport(false);
+      response.redirect("/");
+      return null;
+    }, HANDLER);
+    service.get("/runreport-details", (Route) (request, response) -> {
+      bws.runReport(true);
       response.redirect("/");
       return null;
     }, HANDLER);
@@ -121,7 +126,7 @@ public class BackupWebServer {
     return new FreeMarkerEngine();
   }
 
-  private static BackupWebService<Stats> getBackupWebService() {
+  private static BackupWebService<Stats> getBackupWebServiceTest() {
     return new BackupWebService<Stats>() {
       private Random random = new Random();
 
@@ -157,8 +162,8 @@ public class BackupWebServer {
       }
 
       @Override
-      public void runReport() {
-        System.out.println("Starting report");
+      public void runReport(boolean debug) {
+        System.out.println("Starting report - " + debug);
       }
 
       @Override

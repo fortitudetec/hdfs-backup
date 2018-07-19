@@ -44,7 +44,13 @@ public interface BackupReportWriter extends Closeable {
   void backupRequestError(InetSocketAddress dataNodeAddress, ExtendedBlockWithAddress extendedBlockWithAddress);
 
   void statusBlockMetaDataFetchFromNameNode(String src);
+  
+  void statusBlockMetaDataFetchFromBackStore(ExtendedBlock block);
 
-  void statusExtendedBlocksFromNameNode(String src, ExtendedBlock extendedBlock, DatanodeInfo[] locations);
+  void statusExtendedBlocksFromNameNode(String src, ExtendedBlock block, DatanodeInfo[] locations);
+
+  void statusExtendedBlocksFromBackStore(ExtendedBlock block);
+
+  
 
 }

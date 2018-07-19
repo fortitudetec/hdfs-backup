@@ -26,6 +26,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -148,8 +150,8 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       }
 
       @Override
-      public void runReport() throws IOException {
-        restoreProcessor.runReport();
+      public void runReport(boolean debug) throws IOException {
+        restoreProcessor.runReport(debug);
       }
 
       @Override
@@ -160,6 +162,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
         }
         File[] list = reportPath.listFiles((dir, name) -> name.startsWith("report."));
         if (list != null) {
+          Arrays.sort(list, Collections.reverseOrder());
           for (File f : list) {
             builder.add(f.getName());
           }

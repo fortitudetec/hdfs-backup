@@ -26,6 +26,7 @@ public class BackupReportWriterToFileSystem implements BackupReportWriter {
   public static final String REPORT = "report.";
   public static final String YYYYMMDDHHMMSS = "yyyyMMddHHmmss";
   private final PrintWriter _output;
+  private final boolean _debug;
   private final ThreadLocal<SimpleDateFormat> _format = new ThreadLocal<SimpleDateFormat>() {
 
     @Override
@@ -36,7 +37,11 @@ public class BackupReportWriterToFileSystem implements BackupReportWriter {
   };
 
   public BackupReportWriterToFileSystem(File dir) throws IOException {
+    this(dir, LOG.isDebugEnabled());
+  }
 
+  public BackupReportWriterToFileSystem(File dir, boolean debug) throws IOException {
+    _debug = debug;
     gcOldReports(dir, _format.get(), TimeUnit.DAYS, 7);
     String timestamp = _format.get()
                               .format(new Date());
@@ -136,13 +141,16 @@ public class BackupReportWriterToFileSystem implements BackupReportWriter {
 
   @Override
   public void backupRequestBatch(List<?> batch) {
-    StringBuilder builder = new StringBuilder();
-    for (Object o : batch) {
-      builder.append(" ")
-             .append(o.toString());
+    if (_debug) {
+      StringBuilder builder = new StringBuilder();
+      for (Object o : batch) {
+        builder.append(" ")
+               .append(o.toString());
+      }
+      _output.println(ts() + "backupRequestBatch " + builder.toString());
+    } else {
+      _output.println(ts() + "backupRequestBatch " + batch.size());
     }
-    _output.println(ts() + "backupRequestBatch " + builder.toString());
-    // _output.println(ts() + "backupRequestBatch " + batch.size());
   }
 
   @Override
@@ -171,15 +179,29 @@ public class BackupReportWriterToFileSystem implements BackupReportWriter {
   }
 
   @Override
-  public void statusExtendedBlocksFromNameNode(String src, ExtendedBlock extendedBlock, DatanodeInfo[] locations) {
-    StringBuilder builder = new StringBuilder();
-    for (DatanodeInfo datanodeInfo : locations) {
-      builder.append(" ")
-             .append(datanodeInfo.getIpAddr())
-             .append(":")
-             .append(datanodeInfo.getIpcPort());
+  public void statusBlockMetaDataFetchFromBackStore(ExtendedBlock block) {
+    _output.println(ts() + "statusBlockMetaDataFetchFromBackStore " + block);
+  }
+
+  @Override
+  public void statusExtendedBlocksFromBackStore(ExtendedBlock block) {
+    if (_debug) {
+      _output.println(ts() + "statusExtendedBlocksFromBackStore " + block);
     }
-    _output.println(ts() + "statusExtendedBlocksFromNameNode " + src + " " + extendedBlock + " " + builder);
+  }
+
+  @Override
+  public void statusExtendedBlocksFromNameNode(String src, ExtendedBlock block, DatanodeInfo[] locations) {
+    if (_debug) {
+      StringBuilder builder = new StringBuilder();
+      for (DatanodeInfo datanodeInfo : locations) {
+        builder.append(" ")
+               .append(datanodeInfo.getIpAddr())
+               .append(":")
+               .append(datanodeInfo.getIpcPort());
+      }
+      _output.println(ts() + "statusExtendedBlocksFromNameNode " + src + " " + block + " " + builder);
+    }
   }
 
   private String ts() {

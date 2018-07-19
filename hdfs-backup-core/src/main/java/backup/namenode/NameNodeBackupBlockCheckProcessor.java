@@ -120,8 +120,8 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     return _reportPath;
   }
 
-  public synchronized void runBlockCheck() throws Exception {
-    try (BackupReportWriter writer = getBackupReportWriter()) {
+  public synchronized void runBlockCheck(boolean debug) throws Exception {
+    try (BackupReportWriter writer = getBackupReportWriter(debug)) {
       LOG.info("Starting backup block report.");
       writer.start();
       ExternalExtendedBlockSort<Addresses> nameNodeBlocks = fetchBlocksFromNameNode(writer);
@@ -148,8 +148,8 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private BackupReportWriter getBackupReportWriter() throws IOException {
-    return new BackupReportWriterToFileSystem(_reportPath);
+  private BackupReportWriter getBackupReportWriter(boolean debug) throws IOException {
+    return new BackupReportWriterToFileSystem(_reportPath, debug);
   }
 
   private void checkBlockPool(String blockPoolId, ExternalExtendedBlockSort<Addresses> nameNodeBlocks,
@@ -157,15 +157,17 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     LOG.info("Backup block report for block pool {}.", blockPoolId);
     ExtendedBlockEnum<Addresses> nnEnum = null;
     ExtendedBlockEnum<NullWritable> buEnum = null;
+    DataNodeBackupRPCLookup rpcLookup = dataNodeAddress -> DataNodeBackupRPC.getDataNodeBackupRPC(dataNodeAddress, conf,
+        ugi);
     try {
       nnEnum = nameNodeBlocks.getBlockEnum(blockPoolId);
       buEnum = backupBlocks.getBlockEnum(blockPoolId);
       if (nnEnum == null) {
         restoreAll(writer, buEnum);
       } else if (buEnum == null) {
-        backupAll(writer, nnEnum);
+        backupAll(writer, nnEnum, batchSize, rpcLookup);
       } else {
-        checkAllBlocks(writer, nnEnum, buEnum);
+        checkAllBlocks(writer, nnEnum, buEnum, block -> backupStore.deleteBlock(block), batchSize, rpcLookup);
       }
     } finally {
       IOUtils.closeQuietly(buEnum);
@@ -173,8 +175,9 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private void checkAllBlocks(BackupReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum,
-      ExtendedBlockEnum<NullWritable> buEnum) throws Exception {
+  public static void checkAllBlocks(BackupReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum,
+      ExtendedBlockEnum<NullWritable> buEnum, BackupStoreDeleter deleter, int backupRequestBatchSize,
+      DataNodeBackupRPCLookup rpcLookup) throws Exception {
     nnEnum.next();
     buEnum.next();
     List<ExtendedBlockWithAddress> backupBatch = new ArrayList<>();
@@ -183,10 +186,10 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
         if (buEnum.current() == null && nnEnum.current() == null) {
           return;
         } else if (buEnum.current() == null) {
-          backupAll(writer, nnEnum);
+          backupAll(writer, nnEnum, backupRequestBatchSize, rpcLookup);
           return;
         } else if (nnEnum.current() == null) {
-          deleteAllFromBackupStore(writer, buEnum);
+          deleteAllFromBackupStore(writer, buEnum, deleter);
           return;
         }
 
@@ -205,25 +208,25 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
           // Blocks not equal but block ids present in both reports. Backup.
           writer.deleteBackupBlock(bu);
           try {
-            backupStore.deleteBlock(bu);
+            deleter.deleteBlock(bu);
           } catch (Exception e) {
             LOG.error("Unknown error while trying to delete block " + bu, e);
             writer.deleteBackupBlockError(bu);
           }
-          backupBlock(writer, backupBatch, nnEnum);
+          backupBlock(writer, backupBatch, nnEnum, backupRequestBatchSize, rpcLookup);
           nnEnum.next();
           buEnum.next();
         } else if (compare < 0) {
           // nn 123, bu 124
           // Missing backup block. Backup.
-          backupBlock(writer, backupBatch, nnEnum);
+          backupBlock(writer, backupBatch, nnEnum, backupRequestBatchSize, rpcLookup);
           nnEnum.next();
         } else {
           // nn 125, bu 124
           // Missing namenode block. Remove from backup.
           try {
             writer.deleteBackupBlock(bu);
-            backupStore.deleteBlock(bu);
+            deleter.deleteBlock(bu);
           } catch (Exception e) {
             LOG.error("Unknown error while trying to delete block " + bu, e);
             writer.deleteBackupBlockError(bu);
@@ -233,19 +236,19 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       }
     } finally {
       if (backupBatch.size() > 0) {
-        writeBackupRequests(writer, backupBatch);
+        writeBackupRequests(writer, backupBatch, rpcLookup);
         backupBatch.clear();
       }
     }
   }
 
-  private void deleteAllFromBackupStore(BackupReportWriter writer, ExtendedBlockEnum<NullWritable> buEnum)
-      throws Exception {
+  private static void deleteAllFromBackupStore(BackupReportWriter writer, ExtendedBlockEnum<NullWritable> buEnum,
+      BackupStoreDeleter deleter) throws Exception {
     ExtendedBlock block = buEnum.current();
     if (block != null) {
       try {
         writer.deleteBackupBlock(block);
-        backupStore.deleteBlock(block);
+        deleter.deleteBlock(block);
       } catch (Exception e) {
         LOG.error("Unknown error while trying to delete block " + block, e);
         writer.deleteBackupBlockError(block);
@@ -254,7 +257,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     while ((block = buEnum.next()) != null) {
       try {
         writer.deleteBackupBlock(block);
-        backupStore.deleteBlock(block);
+        deleter.deleteBlock(block);
       } catch (Exception e) {
         LOG.error("Unknown error while trying to delete block " + block, e);
         writer.deleteBackupBlockError(block);
@@ -283,33 +286,35 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     writer.completeRestoreAll();
   }
 
-  private void backupAll(BackupReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum) throws Exception {
+  private static void backupAll(BackupReportWriter writer, ExtendedBlockEnum<Addresses> nnEnum,
+      int backupRequestBatchSize, DataNodeBackupRPCLookup rpcLookup) throws Exception {
     writer.startBackupAll();
     List<ExtendedBlockWithAddress> batch = new ArrayList<>();
     if (nnEnum.current() != null) {
-      backupBlock(writer, batch, nnEnum);
+      backupBlock(writer, batch, nnEnum, backupRequestBatchSize, rpcLookup);
     }
     while (nnEnum.next() != null) {
-      backupBlock(writer, batch, nnEnum);
+      backupBlock(writer, batch, nnEnum, backupRequestBatchSize, rpcLookup);
     }
     if (batch.size() > 0) {
       writer.backupRequestBatch(batch);
-      writeBackupRequests(writer, batch);
+      writeBackupRequests(writer, batch, rpcLookup);
       batch.clear();
     }
     writer.completeBackupAll();
   }
 
-  private void backupBlock(BackupReportWriter writer, List<ExtendedBlockWithAddress> batch,
-      ExtendedBlockEnum<Addresses> nnEnum) {
-    if (batch.size() >= batchSize) {
-      writeBackupRequests(writer, batch);
+  private static void backupBlock(BackupReportWriter writer, List<ExtendedBlockWithAddress> batch,
+      ExtendedBlockEnum<Addresses> nnEnum, int backupRequestBatchSize, DataNodeBackupRPCLookup rpcLookup) {
+    if (batch.size() >= backupRequestBatchSize) {
+      writeBackupRequests(writer, batch, rpcLookup);
       batch.clear();
     }
     batch.add(new ExtendedBlockWithAddress(nnEnum.current(), nnEnum.currentValue()));
   }
 
-  private void writeBackupRequests(BackupReportWriter writer, List<ExtendedBlockWithAddress> batch) {
+  private static void writeBackupRequests(BackupReportWriter writer, List<ExtendedBlockWithAddress> batch,
+      DataNodeBackupRPCLookup rpcLookup) {
     writer.backupRequestBatch(batch);
     for (ExtendedBlockWithAddress extendedBlockWithAddress : batch) {
       LOG.info("Backup block request {}", extendedBlockWithAddress.getExtendedBlock());
@@ -320,7 +325,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
       }
       InetSocketAddress dataNodeAddress = chooseOneAtRandom(addresses);
       try {
-        DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(dataNodeAddress, conf, ugi);
+        DataNodeBackupRPC backup = rpcLookup.getRpc(dataNodeAddress);
         ExtendedBlock extendedBlock = extendedBlockWithAddress.getExtendedBlock();
         backup.backupBlock(extendedBlock.getPoolId(), extendedBlock.getBlockId(), extendedBlock.getLength(),
             extendedBlock.getGenerationStamp());
@@ -331,7 +336,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     }
   }
 
-  private InetSocketAddress chooseOneAtRandom(Addresses address) {
+  private static InetSocketAddress chooseOneAtRandom(Addresses address) {
     String[] ipAddrs = address.getIpAddrs();
     int[] ipcPorts = address.getIpcPorts();
     int index = BackupUtil.nextInt(ipAddrs.length);
@@ -346,7 +351,13 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     ExtendedBlockEnum<Void> extendedBlocks = backupStore.getExtendedBlocks();
     ExtendedBlock block;
     NullWritable value = NullWritable.get();
+    long st = System.nanoTime();
     while ((block = extendedBlocks.next()) != null) {
+      if (st + TimeUnit.SECONDS.toNanos(10) < System.nanoTime()) {
+        writer.statusBlockMetaDataFetchFromBackStore(block);
+        st = System.nanoTime();
+      }
+      writer.statusExtendedBlocksFromBackStore(block);
       backupBlocks.add(block, value);
     }
     return backupBlocks;
@@ -425,7 +436,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   @Override
   protected void runInternal() throws Exception {
     try {
-      runBlockCheck();
+      runBlockCheck(false);
     } catch (Throwable t) {
       LOG.error("Unknown error during block check", t);
       throw t;
@@ -454,6 +465,29 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
     public Addresses(DatanodeInfo[] locations) {
       this(BackupUtil.getIpAddrs(locations), BackupUtil.getIpcPorts(locations));
+    }
+
+    public Addresses(Addresses addresses) {
+      this.ipAddrs = copyString(addresses.getIpAddrs());
+      this.ipcPorts = copyInts(addresses.getIpcPorts());
+    }
+
+    private int[] copyInts(int[] array) {
+      if (array == null) {
+        return null;
+      }
+      int[] newArray = new int[array.length];
+      System.arraycopy(array, 0, newArray, 0, array.length);
+      return newArray;
+    }
+
+    private String[] copyString(String[] array) {
+      if (array == null) {
+        return null;
+      }
+      String[] newArray = new String[array.length];
+      System.arraycopy(array, 0, newArray, 0, array.length);
+      return newArray;
     }
 
     public String[] getIpAddrs() {
@@ -513,9 +547,9 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     private final ExtendedBlock extendedBlock;
     private final Addresses addresses;
 
-    public ExtendedBlockWithAddress(ExtendedBlock extendedBlock, Addresses addresses) {
-      this.extendedBlock = extendedBlock;
-      this.addresses = addresses;
+    public ExtendedBlockWithAddress(ExtendedBlock eb, Addresses addresses) {
+      this.extendedBlock = new ExtendedBlock(eb);
+      this.addresses = new Addresses(addresses);
     }
 
     public ExtendedBlock getExtendedBlock() {
@@ -533,10 +567,10 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
   }
 
-  public void runReport() {
+  public void runReport(boolean debug) {
     Thread thread = new Thread(() -> {
       try {
-        runBlockCheck();
+        runBlockCheck(debug);
       } catch (Exception e) {
         LOG.error("Unknown error", e);
       }

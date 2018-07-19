@@ -137,7 +137,7 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
   }
 
   public void runBlockCheck() throws Exception {
-    this.blockCheck.runBlockCheck();
+    this.blockCheck.runBlockCheck(false);
   }
 
   public void restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
@@ -148,8 +148,8 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     }
   }
 
-  public void runReport() {
-    blockCheck.runReport();
+  public void runReport(boolean debug) {
+    blockCheck.runReport(debug);
   }
 
 }

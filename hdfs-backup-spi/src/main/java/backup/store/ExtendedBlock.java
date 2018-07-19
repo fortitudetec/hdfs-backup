@@ -9,6 +9,13 @@ public class ExtendedBlock {
   private final long length;
   private final long generationStamp;
 
+  public ExtendedBlock(ExtendedBlock extendedBlock) {
+    this.poolId = extendedBlock.getPoolId();
+    this.blockId = extendedBlock.getBlockId();
+    this.length = extendedBlock.getLength();
+    this.generationStamp = extendedBlock.getGenerationStamp();
+  }
+
   public ExtendedBlock(String poolId, long blockId, long length, long generationStamp) {
     this.poolId = poolId;
     this.blockId = blockId;

@@ -34,5 +34,6 @@
 </table>
 
 <input type="button" onclick="location.href='runreport';" value="Run Report" />
+<input type="button" onclick="location.href='runreport-details';" value="Run Report (w/Details)" />
 </body>
 </html>

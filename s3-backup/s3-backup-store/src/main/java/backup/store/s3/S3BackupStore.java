@@ -24,6 +24,7 @@ import org.apache.commons.configuration.SystemConfiguration;
 import com.amazonaws.metrics.AwsSdkMetrics;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.iterable.S3Objects;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.ObjectListing;
@@ -62,38 +63,71 @@ public class S3BackupStore extends BackupStore {
   private int maxKeys;
 
   public static void main(String[] args) throws Exception {
+    // SystemConfiguration systemConfiguration = new SystemConfiguration();
+    // try (S3BackupStore store = new S3BackupStore()) {
+    // store.setConf(systemConfiguration);
+    // store.init();
+    // String poolId = "store-test-" + UUID.randomUUID()
+    // .toString();
+    // long blockId = 0;
+    // int length = 100;
+    // long generationStamp = 100;
+    // ExtendedBlock extendedBlock = new ExtendedBlock(poolId, blockId, length,
+    // generationStamp);
+    // store.backupBlock(extendedBlock, generate(length), generate(length));
+    // if (!store.hasBlock(extendedBlock)) {
+    // throw new RuntimeException("Can not read block that was just written.");
+    // }
+    // try (InputStream data = store.getDataInputStream(extendedBlock)) {
+    // validate(data, 100, 0);
+    // }
+    // try (InputStream meta = store.getMetaDataInputStream(extendedBlock)) {
+    // validate(meta, 100, 0);
+    // }
+    // int count = 0;
+    // try (ExtendedBlockEnum<Void> extendedBlocks = store.getExtendedBlocks())
+    // {
+    // while (extendedBlocks.next() != null) {
+    // count++;
+    // }
+    // }
+    // if (count != 1) {
+    // throw new RuntimeException("Wrong number of blocks. " + count);
+    // }
+    // store.destroyAllBlocks();
+    // }
+    // System.out.println("Yay! The s3 backup store test seems to work.");
+
     SystemConfiguration systemConfiguration = new SystemConfiguration();
+
     try (S3BackupStore store = new S3BackupStore()) {
       store.setConf(systemConfiguration);
       store.init();
-      String poolId = "store-test-" + UUID.randomUUID()
-                                          .toString();
-      long blockId = 0;
-      int length = 100;
-      long generationStamp = 100;
-      ExtendedBlock extendedBlock = new ExtendedBlock(poolId, blockId, length, generationStamp);
-      store.backupBlock(extendedBlock, generate(length), generate(length));
-      if (!store.hasBlock(extendedBlock)) {
-        throw new RuntimeException("Can not read block that was just written.");
-      }
-      try (InputStream data = store.getDataInputStream(extendedBlock)) {
-        validate(data, 100, 0);
-      }
-      try (InputStream meta = store.getMetaDataInputStream(extendedBlock)) {
-        validate(meta, 100, 0);
-      }
-      int count = 0;
-      try (ExtendedBlockEnum<Void> extendedBlocks = store.getExtendedBlocks()) {
-        while (extendedBlocks.next() != null) {
-          count++;
+
+      store.loop();
+
+      ExtendedBlockEnum<Void> extendedBlocks = store.getExtendedBlocks();
+      long l = 0;
+      while (extendedBlocks.next() != null) {
+        // 1075275877
+        // 70098
+        ExtendedBlock block = extendedBlocks.current();
+        if (block.getBlockId() == 1075275877) {
+          System.out.println(block);
         }
+        l++;
       }
-      if (count != 1) {
-        throw new RuntimeException("Wrong number of blocks. " + count);
-      }
-      store.destroyAllBlocks();
+      System.out.println(l);
     }
-    System.out.println("Yay! The s3 backup store test seems to work.");
+
+  }
+
+  private void loop() {
+    long count = 0;
+    for (S3ObjectSummary summary : S3Objects.withPrefix(this.s3Client, this.bucketName, this.objectPrefix)) {
+      count++;
+    }
+    System.out.println(count);
   }
 
   private static void validate(InputStream input, int length, int value) throws IOException {
@@ -163,7 +197,6 @@ public class S3BackupStore extends BackupStore {
   public ExtendedBlockEnum<Void> getExtendedBlocks() throws Exception {
     AmazonS3Client client = getAmazonS3Client();
     try {
-
       return new S3ExtendedBlockEnum(client, bucketName, getExtendedBlocksPrefix());
     } finally {
       releaseAmazonS3Client(client);
