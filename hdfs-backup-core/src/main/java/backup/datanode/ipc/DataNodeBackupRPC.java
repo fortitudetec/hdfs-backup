@@ -54,14 +54,43 @@ public interface DataNodeBackupRPC {
               .getProxy();
   }
 
+  /**
+   * Backup a single block. This is a blocking call.
+   * 
+   * @param poolId
+   * @param blockId
+   * @param length
+   * @param generationStamp
+   * @throws IOException
+   */
   void backupBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
 
+  /**
+   * Restores a single block. This is a blocking call.
+   * 
+   * @param poolId
+   * @param blockId
+   * @param length
+   * @param generationStamp
+   * @return
+   * @throws IOException
+   */
   boolean restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
 
-  boolean isRestoringBlock(String poolId, long blockId, long length, long generationStamp) throws IOException;
-
+  /**
+   * Get backup stats.
+   * 
+   * @return
+   * @throws IOException
+   */
   BackupStats getBackupStats() throws IOException;
 
+  /**
+   * Get restore stats.
+   * 
+   * @return
+   * @throws IOException
+   */
   RestoreStats getRestoreStats() throws IOException;
 
 }

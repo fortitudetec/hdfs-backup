@@ -79,9 +79,6 @@ import backup.store.BackupStoreClassHelper;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
-import backup.zookeeper.ZkUtils;
-import backup.zookeeper.ZooKeeperClient;
-import backup.zookeeper.ZooKeeperClientFactory;
 
 public abstract class MiniClusterTestBase {
 
@@ -94,7 +91,6 @@ public abstract class MiniClusterTestBase {
   protected static final String JAR = "jar";
   protected final File tmpHdfs = new File("./target/tmp_hdfs");
   protected final File tmpParcel = new File("./target/tmp_parcel");
-  protected final String zkConnection = "localhost/backup";
   protected boolean classLoaderLoaded;
 
   protected abstract void setupBackupStore(org.apache.commons.configuration.Configuration conf) throws Exception;
@@ -124,8 +120,7 @@ public abstract class MiniClusterTestBase {
   @Test
   public void testIntegrationBasic() throws Exception {
     File hdfsDir = setupHdfsLocalDir();
-    rmrZk(zkConnection, "/");
-    Configuration conf = setupConfig(hdfsDir, zkConnection);
+    Configuration conf = setupConfig(hdfsDir);
 
     MiniDFSCluster hdfsCluster = new MiniDFSCluster.Builder(conf).build();
     Thread thread = null;
@@ -183,8 +178,7 @@ public abstract class MiniClusterTestBase {
   @Test
   public void testIntegrationBasicFullRestoreFromShutdown() throws Exception {
     File hdfsDir = setupHdfsLocalDir();
-    rmrZk(zkConnection, "/");
-    Configuration conf = setupConfig(hdfsDir, zkConnection);
+    Configuration conf = setupConfig(hdfsDir);
     {
       MiniDFSCluster hdfsCluster = new MiniDFSCluster.Builder(conf).build();
       try {
@@ -230,8 +224,7 @@ public abstract class MiniClusterTestBase {
   @Test
   public void testIntegrationBlockCheckWhenAllBackupStoreBlocksMissing() throws Exception {
     File hdfsDir = setupHdfsLocalDir();
-    rmrZk(zkConnection, "/");
-    Configuration conf = setupConfig(hdfsDir, zkConnection);
+    Configuration conf = setupConfig(hdfsDir);
 
     MiniDFSCluster hdfsCluster = new MiniDFSCluster.Builder(conf).build();
     Thread thread = null;
@@ -239,7 +232,7 @@ public abstract class MiniClusterTestBase {
       DistributedFileSystem fileSystem = hdfsCluster.getFileSystem();
       Path path = new Path("/testing.txt");
       writeFile(fileSystem, path);
-      Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+      Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
       Set<ExtendedBlock> original = getLastGeneration(toSet(backupStore.getExtendedBlocks()));
       destroyBackupStoreBlocks(backupStore);
@@ -273,8 +266,7 @@ public abstract class MiniClusterTestBase {
   @Test
   public void testIntegrationBlockCheckWhenSomeBackupStoreBlocksMissing() throws Exception {
     File hdfsDir = setupHdfsLocalDir();
-    rmrZk(zkConnection, "/");
-    Configuration conf = setupConfig(hdfsDir, zkConnection);
+    Configuration conf = setupConfig(hdfsDir);
 
     MiniDFSCluster hdfsCluster = new MiniDFSCluster.Builder(conf).build();
     Thread thread = null;
@@ -372,7 +364,7 @@ public abstract class MiniClusterTestBase {
     return set;
   }
 
-  private Configuration setupConfig(File hdfsDir, String zkConnection) throws Exception {
+  private Configuration setupConfig(File hdfsDir) throws Exception {
     Configuration conf = new Configuration();
     File backup = new File(tmpHdfs, "backup");
     backup.mkdirs();
@@ -383,9 +375,7 @@ public abstract class MiniClusterTestBase {
     conf.set(DFSConfigKeys.DFS_NAMENODE_PLUGINS_KEY, NameNodeBackupServicePlugin.class.getName());
 
     conf.setInt(BackupConstants.DFS_BACKUP_DATANODE_RPC_PORT_KEY, 0);
-    conf.setInt(BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_KEY, 0);
     conf.setInt(BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_KEY, 0);
-    conf.set(BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY, zkConnection);
 
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 2);// 3
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_MINIMUM_INTERVAL_KEY, 2);// 3
@@ -402,13 +392,6 @@ public abstract class MiniClusterTestBase {
     }
 
     return conf;
-  }
-
-  public static void rmrZk(String zkConnection, String path) throws Exception {
-    try (ZooKeeperClientFactory zkcf = ZkUtils.newZooKeeperClientFactory(zkConnection, 30000)) {
-      ZooKeeperClient zk = zkcf.getZk();
-      ZkUtils.rmr(zk, path);
-    }
   }
 
   public File extractTar(File output, LocalRepository localRepo) throws Exception {

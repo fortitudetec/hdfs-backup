@@ -4,6 +4,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.IOUtils;
 
@@ -25,6 +27,21 @@ public class Closer implements Closeable {
     for (Closeable closeable : list) {
       IOUtils.closeQuietly(closeable);
     }
+  }
+
+  public ExecutorService register(ExecutorService executor) {
+    register((Closeable) () -> {
+      executor.shutdown();
+      try {
+        if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+          executor.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        executor.shutdownNow();
+        throw new IOException(e);
+      }
+    });
+    return executor;
   }
 
 }

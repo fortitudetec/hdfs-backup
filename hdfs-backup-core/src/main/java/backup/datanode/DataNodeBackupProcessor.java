@@ -15,129 +15,116 @@
  */
 package backup.datanode;
 
-import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY;
-import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT;
-import static backup.BackupConstants.DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY;
-import static backup.BackupConstants.LOCKS;
+import static backup.BackupConstants.DFS_BACKUP_DATANODE_BACKUP_RETRY_DELAY_KEY;
+import static backup.BackupConstants.DFS_BACKUP_DATANODE_RETRY_DELAY_DEFAULT;
 
-import java.io.Closeable;
+import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
-import org.apache.zookeeper.KeeperException;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import backup.datanode.ipc.BackupStats;
+import backup.namenode.ipc.DatanodeUuids;
 import backup.store.BackupStore;
 import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
 import backup.store.LengthInputStream;
-import backup.util.Closer;
-import backup.zookeeper.ZkUtils;
-import backup.zookeeper.ZooKeeperClientFactory;
-import backup.zookeeper.ZooKeeperLockManager;
 
-public class DataNodeBackupProcessor implements Closeable {
+public class DataNodeBackupProcessor extends DataNodeBackupProcessorBase {
 
   private final static Logger LOG = LoggerFactory.getLogger(DataNodeBackupProcessor.class);
 
-  private final DataNode datanode;
-  private final BackupStore backupStore;
-  private final ZooKeeperClientFactory zkcf;
-  private final ZooKeeperLockManager lockManager;
-  private final Closer closer;
-  private final AtomicBoolean running = new AtomicBoolean(true);
-  private final AtomicInteger backupsInProgress = new AtomicInteger();
-  private final Meter bytesPerSecond = new Meter();
+  private final DataNode _datanode;
+  private final BackupStore _backupStore;
+  private final NameNodeClient _nameNodeClient;
+  private final long _retryDelay;
 
   public DataNodeBackupProcessor(Configuration conf, DataNode datanode) throws Exception {
-    this.closer = Closer.create();
-    this.datanode = datanode;
-    backupStore = closer.register(BackupStore.create(BackupUtil.convert(conf)));
-
-    int zkSessionTimeout = conf.getInt(DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY,
-        DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT);
-    String zkConnectionString = conf.get(DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY);
-    if (zkConnectionString == null) {
-      throw new RuntimeException("ZooKeeper connection string missing [" + DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY + "].");
-    }
-    zkcf = closer.register(ZkUtils.newZooKeeperClientFactory(zkConnectionString, zkSessionTimeout));
-    lockManager = closer.register(new ZooKeeperLockManager(zkcf, LOCKS));
-  }
-
-  public BackupStats getBackupStats() {
-    BackupStats backupStats = new BackupStats();
-    backupStats.setBackupsInProgressCount(backupsInProgress.get());
-    backupStats.setBackupBytesPerSecond(bytesPerSecond.getCountPerSecond());
-    return backupStats;
-  }
-
-  /**
-   * This method can not fail or block or this could cause problems for the
-   * datanode itself.
-   * 
-   * @throws Exception
-   */
-  public void blockFinalized(boolean bypassLock, ExtendedBlock extendedBlock) throws Exception {
-    if (backupStore.hasBlock(extendedBlock)) {
-      LOG.info("block {} already backed up", extendedBlock);
-      return;
-    }
-    String blockId = Long.toString(extendedBlock.getBlockId());
-    try {
-      if (bypassLock) {
-        performBackup(extendedBlock, blockId);
-      } else {
-        try {
-          if (lockManager.tryToLock(blockId)) {
-            performBackup(extendedBlock, blockId);
-          }
-        } finally {
-          backupsInProgress.decrementAndGet();
-          lockManager.unlock(blockId);
-        }
-      }
-    } catch (Exception e) {
-      if (e instanceof KeeperException) {
-        LOG.warn("ZooKeeper error during backup of {} bypassing lock", blockId);
-        performBackup(extendedBlock, blockId);
-      } else {
-        throw e;
-      }
-    }
-  }
-
-  private void performBackup(ExtendedBlock extendedBlock, String blockId) throws Exception {
-    backupsInProgress.incrementAndGet();
-    FsDatasetSpi<?> fsDataset = datanode.getFSDataset();
-    org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
-
-    BlockLocalPathInfo blockLocalPathInfo = fsDataset.getBlockLocalPathInfo(heb);
-    long numBytes = blockLocalPathInfo.getNumBytes();
-    try (LengthInputStream data = new LengthInputStream(trackThroughPut(fsDataset.getBlockInputStream(heb, 0)),
-        numBytes)) {
-      org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta = fsDataset.getMetaDataInputStream(heb);
-      try (LengthInputStream meta = new LengthInputStream(trackThroughPut(tmeta), tmeta.getLength())) {
-        backupStore.backupBlock(extendedBlock, data, meta);
-      }
-    }
+    super(conf);
+    _retryDelay = conf.getLong(DFS_BACKUP_DATANODE_BACKUP_RETRY_DELAY_KEY, DFS_BACKUP_DATANODE_RETRY_DELAY_DEFAULT);
+    _backupStore = _closer.register(BackupStore.create(BackupUtil.convert(conf)));
+    _datanode = datanode;
+    _nameNodeClient = new NameNodeClient(conf, UserGroupInformation.getCurrentUser());
   }
 
   @Override
-  public void close() {
-    running.set(false);
-    IOUtils.closeQuietly(closer);
+  protected long doBackup(ExtendedBlock extendedBlock, boolean force) throws Exception {
+    if (!force) {
+      long blockId = extendedBlock.getBlockId();
+      DatanodeUuids result;
+      try {
+        result = _nameNodeClient.getDatanodeUuids(blockId);
+      } catch (Exception e) {
+        if (LOG.isDebugEnabled()) {
+          LOG.error("datanode UUID lookup failed " + e.getCause(), e);
+        } else {
+          LOG.error("datanode UUID lookup failed {}", e.getCause());
+        }
+        result = new DatanodeUuids();
+      }
+      List<String> datanodeUuids = result.getDatanodeUuids();
+      if (!datanodeUuids.isEmpty()) {
+        LOG.debug("datanode UUIDs for block id {} {}", blockId, datanodeUuids);
+        List<String> orderedDataNodeUuids = getOrderDataNodeUuids(datanodeUuids, blockId);
+        String datanodeUuid = _datanode.getDatanodeUuid();
+        int binarySearch = Collections.binarySearch(orderedDataNodeUuids, datanodeUuid);
+        if (binarySearch == 0) {
+          LOG.debug("datanode UUID {} first in list {} for block id {}, performing backup", datanodeUuid, datanodeUuids,
+              blockId);
+        } else if (binarySearch > 0) {
+          return binarySearch * _retryDelay;
+        } else {
+          LOG.debug("datanode UUID {} not found in list {} for block id {}, forcing backup", datanodeUuid,
+              datanodeUuids, blockId);
+        }
+      } else {
+        LOG.debug("datanode UUIDs for block id {} empty, forcing backup", blockId);
+      }
+    }
+
+    if (_backupStore.hasBlock(extendedBlock)) {
+      LOG.debug("block {} already backed up", extendedBlock);
+      return 0;
+    }
+    FsDatasetSpi<?> fsDataset = _datanode.getFSDataset();
+    org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
+    LOG.info("performing block {}", extendedBlock);
+    long numBytes = heb.getNumBytes();
+    try (LengthInputStream data = new LengthInputStream(trackThroughPut(fsDataset.getBlockInputStream(heb, 0)),
+        numBytes)) {
+      org.apache.hadoop.hdfs.server.datanode.fsdataset.LengthInputStream tmeta;
+      tmeta = fsDataset.getMetaDataInputStream(heb);
+      try (LengthInputStream meta = new LengthInputStream(trackThroughPut(tmeta), tmeta.getLength())) {
+        _backupStore.backupBlock(extendedBlock, data, meta);
+        return 0;
+      }
+    } catch (IOException e) {
+      if (LOG.isDebugEnabled() || !e.getMessage()
+                                    .contains("is not valid")) {
+        LOG.error(e.getMessage(), e);
+      } else {
+        LOG.debug("block {} has been removed {}", extendedBlock);
+      }
+      return 0;
+    }
+  }
+
+  private List<String> getOrderDataNodeUuids(List<String> datanodeUuids, long blockId) {
+    List<String> result = new ArrayList<>(datanodeUuids);
+    Collections.shuffle(result, new Random(blockId));
+    return result;
   }
 
   private InputStream trackThroughPut(InputStream input) {
-    return new ThroughPutInputStream(input, bytesPerSecond.getCounter());
+    return new ThroughPutInputStream(input, _backupThroughput);
   }
 
 }

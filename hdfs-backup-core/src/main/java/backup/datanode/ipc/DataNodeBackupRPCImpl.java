@@ -34,9 +34,18 @@ public class DataNodeBackupRPCImpl implements DataNodeBackupRPC {
   @Override
   public void backupBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
     try {
-      backupProcessor.blockFinalized(true, new ExtendedBlock(poolId, blockId, length, generationStamp));
-    } catch (Exception e) {
-      throw new IOException(e);
+      backupProcessor.performBackup(new ExtendedBlock(poolId, blockId, length, generationStamp));
+    } catch (Throwable t) {
+      throw new IOException(t);
+    }
+  }
+
+  @Override
+  public boolean restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
+    try {
+      return restoreProcessor.addToRestoreQueue(new ExtendedBlock(poolId, blockId, length, generationStamp));
+    } catch (Throwable t) {
+      throw new IOException(t);
     }
   }
 
@@ -46,18 +55,8 @@ public class DataNodeBackupRPCImpl implements DataNodeBackupRPC {
   }
 
   @Override
-  public boolean restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
-    return restoreProcessor.addToRestoreQueue(new ExtendedBlock(poolId, blockId, length, generationStamp));
-  }
-
-  @Override
   public RestoreStats getRestoreStats() throws IOException {
     return restoreProcessor.getRestoreStats();
-  }
-
-  @Override
-  public boolean isRestoringBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
-    return restoreProcessor.isRestoringBlock(poolId, blockId, length, generationStamp);
   }
 
 }

@@ -17,6 +17,8 @@ package backup.namenode;
 
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_HTTP_PORT_KEY;
+import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT;
+import static backup.BackupConstants.DFS_BACKUP_NAMENODE_RPC_PORT_KEY;
 
 import java.io.Closeable;
 import java.io.File;
@@ -25,6 +27,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,12 +38,18 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.apache.hadoop.ipc.RPC;
+import org.apache.hadoop.ipc.RPC.Server;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.authorize.PolicyProvider;
+import org.apache.hadoop.security.authorize.Service;
+import org.apache.hadoop.security.authorize.ServiceAuthorizationManager;
 import org.apache.hadoop.util.ServicePlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +62,8 @@ import backup.SingletonManager;
 import backup.api.BackupWebService;
 import backup.api.Stats;
 import backup.datanode.ipc.DataNodeBackupRPC;
+import backup.namenode.ipc.NameNodeBackupRPC;
+import backup.namenode.ipc.NameNodeBackupRPCImpl;
 import backup.namenode.ipc.StatsWritable;
 import backup.util.Closer;
 import classloader.FileClassLoader;
@@ -73,8 +84,8 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
 
   private NameNodeRestoreProcessor restoreProcessor;
   private HttpServer httpServer;
-
   private Thread restoreOnStartup;
+  private Server server;
 
   @Override
   public void start(Object service) {
@@ -85,6 +96,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+    Configuration conf = getConf();
     NameNode namenode = (NameNode) service;
     BlockManager blockManager = namenode.getNamesystem()
                                         .getBlockManager();
@@ -94,6 +106,27 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
                                          .getInstance(namenode,
                                              () -> new NameNodeRestoreProcessor(getConf(), namenode, ugi));
       LOG.info("NameNode Backup plugin setup using UGI {}", ugi);
+
+      NameNodeBackupRPCImpl backupRPCImpl = new NameNodeBackupRPCImpl(blockManager);
+
+      InetSocketAddress listenerAddress = namenode.getServiceRpcAddress();
+      int ipcPort = listenerAddress.getPort();
+      String bindAddress = listenerAddress.getAddress()
+                                          .getHostAddress();
+      int port = conf.getInt(DFS_BACKUP_NAMENODE_RPC_PORT_KEY, DFS_BACKUP_NAMENODE_RPC_PORT_DEFAULT);
+      if (port == 0) {
+        port = ipcPort + 1;
+      }
+      server = new RPC.Builder(conf).setBindAddress(bindAddress)
+                                    .setPort(port)
+                                    .setInstance(backupRPCImpl)
+                                    .setProtocol(NameNodeBackupRPC.class)
+                                    .build();
+      ServiceAuthorizationManager serviceAuthorizationManager = server.getServiceAuthorizationManager();
+      serviceAuthorizationManager.refresh(conf, new BackupPolicyProvider());
+      server.start();
+
+      LOG.info("NameNode Backup RPC listening on {}", port);
 
       int httpPort = getConf().getInt(DFS_BACKUP_NAMENODE_HTTP_PORT_KEY, DFS_BACKUP_NAMENODE_HTTP_PORT_DEFAULT);
       if (httpPort != 0) {
@@ -296,5 +329,23 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       }
     }
     return new FileClassLoader(allFiles);
+  }
+
+  public static class BackupPolicyProvider extends PolicyProvider {
+
+    @Override
+    public Service[] getServices() {
+      return new Service[] { new BackupService() };
+    }
+  }
+
+  public static class BackupService extends Service {
+
+    private static final String SECURITY_DATANODE_BACKUP_PROTOCOL_ACL = "security.datanode.backup.protocol.acl";
+
+    public BackupService() {
+      super(SECURITY_DATANODE_BACKUP_PROTOCOL_ACL, NameNodeBackupRPC.class);
+    }
+
   }
 }

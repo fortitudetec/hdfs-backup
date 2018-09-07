@@ -18,10 +18,6 @@ Required for every backup store:
   <name>dfs.namenode.plugins</name>
   <value>backup.namenode.NameNodeBackupServicePlugin</value>
 </property>
-<property>
-  <name>dfs.backup.zookeeper.connection</name>
-  <value><zookeeper connection>/backup</value>
-</property>
 ```
 
 ## Local Required Setup

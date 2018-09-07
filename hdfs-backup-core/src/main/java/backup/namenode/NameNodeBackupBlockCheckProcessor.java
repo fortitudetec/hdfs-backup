@@ -72,14 +72,12 @@ import backup.store.ExternalExtendedBlockSort;
 
 public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
-  private static final String SNAPSHOT = ".snapshot";
-
-  private static final String DFS_NAMENODE_NAME_DIR = "dfs.namenode.name.dir";
-
   private final static Logger LOG = LoggerFactory.getLogger(NameNodeBackupBlockCheckProcessor.class);
 
   private static final String NAMENODE_SORT = "namenode-sort/";
   private static final String BACKUPSTORE_SORT = "backupstore-sort/";
+  private static final String SNAPSHOT = ".snapshot";
+  private static final String DFS_NAMENODE_NAME_DIR = "dfs.namenode.name.dir";
 
   private final NameNodeRestoreProcessor processor;
   private final long checkInterval;
@@ -374,8 +372,10 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     addExtendedBlocksFromNameNode(writer, nameNodeBlocks, path);
     // Add snapshot dirs
     SnapshottableDirectoryStatus[] snapshottableDirListing = fileSystem.getSnapshottableDirListing();
-    for (SnapshottableDirectoryStatus status : snapshottableDirListing) {
-      addExtendedBlocksFromNameNode(writer, nameNodeBlocks, new Path(status.getFullPath(), SNAPSHOT));
+    if (snapshottableDirListing != null) {
+      for (SnapshottableDirectoryStatus status : snapshottableDirListing) {
+        addExtendedBlocksFromNameNode(writer, nameNodeBlocks, new Path(status.getFullPath(), SNAPSHOT));
+      }
     }
     writer.completeBlockMetaDataFetchFromNameNode();
     return nameNodeBlocks;

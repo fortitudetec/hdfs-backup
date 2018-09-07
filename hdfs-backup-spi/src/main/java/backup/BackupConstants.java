@@ -26,11 +26,6 @@ public class BackupConstants {
   public static final String DFS_BACKUP_STORE_KEY = "dfs.backup.store.key";
   public static final String DFS_BACKUP_STORE_DEFAULT = DevNullBackupStore.class.getName();
 
-  public static final String DFS_BACKUP_ZOOKEEPER_CONNECTION_KEY = "dfs.backup.zookeeper.connection";
-
-  public static final String DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_KEY = "dfs.backup.zookeeper.session.timeout";
-  public static final int DFS_BACKUP_ZOOKEEPER_SESSION_TIMEOUT_DEFAULT = 30000;
-
   public static final String DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY = "dfs.backup.remote.backup.batch";
   public static final int DFS_BACKUP_REMOTE_BACKUP_BATCH_DEFAULT = 100;
 
@@ -61,5 +56,17 @@ public class BackupConstants {
 
   public static final String DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY = "dfs.backup.namenode.missing.blocks.poll.time";
   public static final long DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT = TimeUnit.SECONDS.toMillis(10);
+
+  public static final String DFS_BACKUP_DATANODE_BACKUP_THREAD_COUNT_KEY = "dfs.backup.datanode.backup.thread.count";
+  public static final int DFS_BACKUP_DATANODE_BACKUP_THREAD_COUNT_DEFAULT = 1;
+
+  public static final String DFS_BACKUP_DATANODE_BACKUP_QUEUE_DEPTH_KEY = "dfs.backup.datanode.backup.queue.depth";
+  public static final int DFS_BACKUP_DATANODE_BACKUP_QUEUE_DEPTH_DEFAULT = 10_000;
+
+  public static final String DFS_BACKUP_DATANODE_BACKUP_AGE_KEY = "dfs.backup.datanode.backup.age";
+  public static final long DFS_BACKUP_DATANODE_BACKUP_AGE_DEFAULT = TimeUnit.SECONDS.toMillis(5);
+
+  public static final String DFS_BACKUP_DATANODE_BACKUP_RETRY_DELAY_KEY = "dfs.backup.datanode.backup.retry.delay";
+  public static final long DFS_BACKUP_DATANODE_RETRY_DELAY_DEFAULT = TimeUnit.MINUTES.toSeconds(1);
 
 }

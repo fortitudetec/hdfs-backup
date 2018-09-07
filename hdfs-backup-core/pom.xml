@@ -18,6 +18,10 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>io.dropwizard.metrics</groupId>
+			<artifactId>metrics-core</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>hdfs-backup</groupId>
 			<artifactId>hdfs-backup-api</artifactId>
 		</dependency>

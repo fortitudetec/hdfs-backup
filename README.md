@@ -37,10 +37,6 @@ This will execute all tests and build all of the binaries.
   <name>dfs.namenode.plugins</name>
   <value>backup.namenode.NameNodeBackupServicePlugin</value>
 </property>
-<property>
-  <name>dfs.backup.zookeeper.connection</name>
-  <value><zookeeper connection>/backup</value>
-</property>
 ```
 
 ## Generic HDFS Installation

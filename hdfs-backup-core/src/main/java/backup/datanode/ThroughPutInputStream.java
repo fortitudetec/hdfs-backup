@@ -2,14 +2,15 @@ package backup.datanode;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.atomic.AtomicLong;
+
+import com.codahale.metrics.Meter;
 
 public class ThroughPutInputStream extends InputStream {
 
   private final InputStream input;
-  private final AtomicLong bytesCounter;
+  private final Meter bytesCounter;
 
-  public ThroughPutInputStream(InputStream input, AtomicLong bytesCounter) {
+  public ThroughPutInputStream(InputStream input, Meter bytesCounter) {
     this.input = input;
     this.bytesCounter = bytesCounter;
   }
@@ -19,19 +20,19 @@ public class ThroughPutInputStream extends InputStream {
     try {
       return input.read();
     } finally {
-      bytesCounter.incrementAndGet();
+      bytesCounter.mark();
     }
   }
 
   public int read(byte[] b) throws IOException {
     int read = input.read(b);
-    bytesCounter.addAndGet(read);
+    bytesCounter.mark(read);
     return read;
   }
 
   public int read(byte[] b, int off, int len) throws IOException {
     int read = input.read(b, off, len);
-    bytesCounter.addAndGet(read);
+    bytesCounter.mark(read);
     return read;
   }
 
