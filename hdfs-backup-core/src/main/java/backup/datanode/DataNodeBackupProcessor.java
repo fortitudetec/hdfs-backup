@@ -18,14 +18,17 @@ package backup.datanode;
 import static backup.BackupConstants.DFS_BACKUP_DATANODE_BACKUP_RETRY_DELAY_KEY;
 import static backup.BackupConstants.DFS_BACKUP_DATANODE_RETRY_DELAY_DEFAULT;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -94,8 +97,17 @@ public class DataNodeBackupProcessor extends DataNodeBackupProcessorBase {
       LOG.debug("block {} already backed up", extendedBlock);
       return 0;
     }
+    
     FsDatasetSpi<?> fsDataset = _datanode.getFSDataset();
+    
     org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
+    BlockLocalPathInfo info = fsDataset.getBlockLocalPathInfo(heb);
+    String blockPath = info.getBlockPath();
+    if (Files.isSymbolicLink(new File(blockPath).toPath())) {
+      LOG.debug("block {} is symbolic link, not backing up", extendedBlock);
+      return 0;
+    }
+    
     LOG.info("performing block {}", extendedBlock);
     long numBytes = heb.getNumBytes();
     try (LengthInputStream data = new LengthInputStream(trackThroughPut(fsDataset.getBlockInputStream(heb, 0)),

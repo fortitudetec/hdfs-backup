@@ -15,6 +15,8 @@
  */
 package backup.namenode;
 
+import static backup.BackupConstants.DFS_BACKUP_IGNORE_PATH_FILE_DEFAULT;
+import static backup.BackupConstants.DFS_BACKUP_IGNORE_PATH_FILE_KEY;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DELAY_KEY;
@@ -23,11 +25,12 @@ import static backup.BackupConstants.DFS_BACKUP_NAMENODE_LOCAL_DIR_KEY;
 import static backup.BackupConstants.DFS_BACKUP_REMOTE_BACKUP_BATCH_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY;
 
+import java.io.BufferedReader;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
@@ -60,6 +63,9 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSet.Builder;
+
 import backup.BaseProcessor;
 import backup.datanode.ipc.DataNodeBackupRPC;
 import backup.namenode.report.BackupReportWriter;
@@ -89,6 +95,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   private final NameNode namenode;
   private final UserGroupInformation ugi;
   private final File _reportPath;
+  private final String ignorePath;
 
   public NameNodeBackupBlockCheckProcessor(Configuration conf, NameNodeRestoreProcessor processor, NameNode namenode,
       UserGroupInformation ugi) throws Exception {
@@ -106,6 +113,7 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     this.processor = processor;
     backupStore = BackupStore.create(BackupUtil.convert(conf));
     this.fileSystem = (DistributedFileSystem) FileSystem.get(conf);
+    this.ignorePath = conf.get(DFS_BACKUP_IGNORE_PATH_FILE_KEY, DFS_BACKUP_IGNORE_PATH_FILE_DEFAULT);
     this.batchSize = conf.getInt(DFS_BACKUP_REMOTE_BACKUP_BATCH_KEY, DFS_BACKUP_REMOTE_BACKUP_BATCH_DEFAULT);
     this.checkInterval = conf.getLong(DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_KEY,
         DFS_BACKUP_NAMENODE_BLOCK_CHECK_INTERVAL_DEFAULT);
@@ -367,22 +375,56 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
     ExternalExtendedBlockSort<Addresses> nameNodeBlocks = new ExternalExtendedBlockSort<Addresses>(conf, sortDir,
         Addresses.class);
 
+    Set<Path> pathSetToIgnore = getPathSetToIgnore();
+
     Path path = new Path("/");
     // Add normal files
-    addExtendedBlocksFromNameNode(writer, nameNodeBlocks, path);
+    addExtendedBlocksFromNameNode(writer, nameNodeBlocks, path, pathSetToIgnore);
     // Add snapshot dirs
     SnapshottableDirectoryStatus[] snapshottableDirListing = fileSystem.getSnapshottableDirListing();
     if (snapshottableDirListing != null) {
       for (SnapshottableDirectoryStatus status : snapshottableDirListing) {
-        addExtendedBlocksFromNameNode(writer, nameNodeBlocks, new Path(status.getFullPath(), SNAPSHOT));
+        addExtendedBlocksFromNameNode(writer, nameNodeBlocks, new Path(status.getFullPath(), SNAPSHOT),
+            pathSetToIgnore);
       }
     }
     writer.completeBlockMetaDataFetchFromNameNode();
     return nameNodeBlocks;
   }
 
+  private Set<Path> getPathSetToIgnore() throws IOException {
+    Path path = new Path(ignorePath);
+    if (!fileSystem.exists(path)) {
+      return ImmutableSet.of();
+    }
+    Builder<Path> builder = ImmutableSet.builder();
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(fileSystem.open(path)))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        String s = line.trim();
+        if (s.startsWith("/")) {
+          Path ignorePath = new Path(s);
+          Path qualifiedPath = fileSystem.makeQualified(ignorePath);
+          LOG.info("Path added to ignore list {}", qualifiedPath);
+          builder.add(qualifiedPath);
+        }
+      }
+    }
+    return builder.build();
+  }
+
+  public static boolean shouldIgnore(Set<Path> pathSetToIgnore, Path path) {
+    do {
+      if (pathSetToIgnore.contains(path)) {
+        return true;
+      }
+      path = path.getParent();
+    } while (path != null);
+    return false;
+  }
+
   private void addExtendedBlocksFromNameNode(BackupReportWriter writer,
-      ExternalExtendedBlockSort<Addresses> nameNodeBlocks, Path path) throws FileNotFoundException, IOException {
+      ExternalExtendedBlockSort<Addresses> nameNodeBlocks, Path path, Set<Path> pathSetToIgnore) throws IOException {
     RemoteIterator<LocatedFileStatus> iterator = fileSystem.listFiles(path, true);
     DFSClient client = fileSystem.getClient();
     long st = System.nanoTime();
@@ -393,15 +435,20 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
                                                       .toString());
         st = System.nanoTime();
       }
-      addExtendedBlocksFromNameNode(writer, nameNodeBlocks, client, fs);
+      addExtendedBlocksFromNameNode(writer, nameNodeBlocks, client, fs, pathSetToIgnore);
     }
   }
 
   private void addExtendedBlocksFromNameNode(BackupReportWriter writer,
-      ExternalExtendedBlockSort<Addresses> nameNodeBlocks, DFSClient client, FileStatus fs) throws IOException {
-    String src = fs.getPath()
-                   .toUri()
-                   .getPath();
+      ExternalExtendedBlockSort<Addresses> nameNodeBlocks, DFSClient client, FileStatus fs, Set<Path> pathSetToIgnore)
+      throws IOException {
+    Path qualifiedPath = fileSystem.makeQualified(fs.getPath());
+    if (shouldIgnore(pathSetToIgnore, qualifiedPath)) {
+      return;
+    }
+
+    String src = qualifiedPath.toUri()
+                              .getPath();
     long start = 0;
     long length = fs.getLen();
 

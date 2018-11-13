@@ -69,4 +69,7 @@ public class BackupConstants {
   public static final String DFS_BACKUP_DATANODE_BACKUP_RETRY_DELAY_KEY = "dfs.backup.datanode.backup.retry.delay";
   public static final long DFS_BACKUP_DATANODE_RETRY_DELAY_DEFAULT = TimeUnit.MINUTES.toSeconds(1);
 
+  public static final String DFS_BACKUP_IGNORE_PATH_FILE_KEY = "DFS_BACKUP_IGNORE_PATH_FILE";
+  public static final String DFS_BACKUP_IGNORE_PATH_FILE_DEFAULT = "/backup/ignore";
+
 }
