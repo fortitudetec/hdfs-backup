@@ -22,6 +22,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.concurrent.Callable;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
@@ -39,6 +40,7 @@ import backup.store.BackupUtil;
 public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
 
   private static final String FINALIZE_BLOCK = "finalizeBlock";
+  private static final String CALL = "call";
 
   private Factory<FsDatasetSpi<?>> factory;
   private DataNodeBackupProcessor backupProcessor;
@@ -80,7 +82,7 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
       DataNodeBackupProcessor backupProcessor) {
     InvocationHandler handler = new BackupInvocationHandler(datasetSpi, backupProcessor);
     return (FsDatasetSpi<?>) Proxy.newProxyInstance(FsDatasetSpi.class.getClassLoader(),
-        new Class<?>[] { FsDatasetSpi.class }, handler);
+        new Class<?>[] { FsDatasetSpi.class, Callable.class }, handler);
   }
 
   static class BackupInvocationHandler implements InvocationHandler {
@@ -96,8 +98,11 @@ public class BackupFsDatasetSpiFactory extends Factory<FsDatasetSpi<?>> {
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
       try {
-        Object result = method.invoke(datasetSpi, args);
         String name = method.getName();
+        if (name.equals(CALL)) {
+          return datasetSpi;
+        }
+        Object result = method.invoke(datasetSpi, args);
         if (name.equals(FINALIZE_BLOCK)) {
           ExtendedBlock extendedBlock = (ExtendedBlock) args[0];
           backup.store.ExtendedBlock eb = BackupUtil.fromHadoop(extendedBlock);

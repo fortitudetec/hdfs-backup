@@ -75,6 +75,7 @@ import backup.store.BackupUtil;
 import backup.store.ExtendedBlock;
 import backup.store.ExtendedBlockEnum;
 import backup.store.ExternalExtendedBlockSort;
+import backup.util.HdfsUtils;
 
 public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
 
@@ -127,6 +128,9 @@ public class NameNodeBackupBlockCheckProcessor extends BaseProcessor {
   }
 
   public synchronized void runBlockCheck(boolean debug) throws Exception {
+    if (!HdfsUtils.isActiveNamenode(conf)) {
+      return;
+    }
     try (BackupReportWriter writer = getBackupReportWriter(debug)) {
       LOG.info("Starting backup block report.");
       writer.start();

@@ -97,17 +97,20 @@ public class DataNodeBackupProcessor extends DataNodeBackupProcessorBase {
       LOG.debug("block {} already backed up", extendedBlock);
       return 0;
     }
-    
+
     FsDatasetSpi<?> fsDataset = _datanode.getFSDataset();
-    
+
     org.apache.hadoop.hdfs.protocol.ExtendedBlock heb = BackupUtil.toHadoop(extendedBlock);
+    if (!fsDataset.isValidBlock(heb)) {
+      return 0;
+    }
     BlockLocalPathInfo info = fsDataset.getBlockLocalPathInfo(heb);
     String blockPath = info.getBlockPath();
     if (Files.isSymbolicLink(new File(blockPath).toPath())) {
       LOG.debug("block {} is symbolic link, not backing up", extendedBlock);
       return 0;
     }
-    
+
     LOG.info("performing block {}", extendedBlock);
     long numBytes = heb.getNumBytes();
     try (LengthInputStream data = new LengthInputStream(trackThroughPut(fsDataset.getBlockInputStream(heb, 0)),
