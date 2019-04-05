@@ -23,6 +23,7 @@ import java.net.InetSocketAddress;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.ipc.ProtocolInfo;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.net.NetUtils;
@@ -45,5 +46,5 @@ public interface NameNodeBackupRPC {
               .getProxy();
   }
 
-  DatanodeUuids getDatanodeUuids(long blockId) throws IOException;
+  DatanodeUuids getDatanodeUuids(String poolId, Block block) throws IOException;
 }

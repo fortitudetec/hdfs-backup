@@ -6,6 +6,8 @@ import static backup.BackupConstants.DFS_BACKUP_STORE_KEY;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collection;
+import java.util.List;
 
 import org.apache.commons.configuration.Configuration;
 
@@ -59,6 +61,12 @@ public abstract class BackupStore extends Configured implements Closeable {
   public abstract ExtendedBlockEnum<Void> getExtendedBlocks() throws Exception;
 
   /**
+   * Get a list of the next {@link ExtendedBlock}s from the store after the one
+   * provided, starts at beginning if null is passed.
+   */
+  public abstract List<ExtendedBlock> getExtendedBlocks(ExtendedBlock extendedBlock) throws Exception;
+
+  /**
    * Removes block from the backup store.
    */
   public abstract void deleteBlock(ExtendedBlock extendedBlock) throws Exception;
@@ -74,4 +82,6 @@ public abstract class BackupStore extends Configured implements Closeable {
   public void close() throws IOException {
 
   }
+
+  public abstract void deleteBlocks(Collection<ExtendedBlock> deletes) throws Exception;
 }

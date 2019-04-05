@@ -16,28 +16,33 @@ public class NameNodeBackupRPCImpl implements NameNodeBackupRPC {
 
   private final BlockManager _blockManager;
 
-  public NameNodeBackupRPCImpl(BlockManager blockManager) {
+  private final String _blockPoolId;
+
+  public NameNodeBackupRPCImpl(String blockPoolId, BlockManager blockManager) {
+    _blockPoolId = blockPoolId;
     _blockManager = blockManager;
   }
 
   @Override
-  public DatanodeUuids getDatanodeUuids(long blockId) throws IOException {
+  public DatanodeUuids getDatanodeUuids(String poolId, Block block) throws IOException {
+    if (!_blockPoolId.equals(poolId)) {
+      throw new IOException("Block pool id " + poolId + " does not match this namenode " + _blockPoolId);
+    }
     DatanodeUuids datanodeUuids = new DatanodeUuids();
-    Block b = new Block(blockId);
     BlockCollection blockCollection;
     try {
-      blockCollection = _blockManager.getBlockCollection(b);
+      blockCollection = _blockManager.getBlockCollection(block);
     } catch (NullPointerException e) {
       return datanodeUuids;
     }
     if (blockCollection == null) {
-      LOGGER.info("block collection null for block id {}", blockId);
+      LOGGER.debug("block collection null for block {}", block);
       return datanodeUuids;
     }
 
     BlockInfo blockInfo = blockCollection.getLastBlock();
     if (blockInfo == null) {
-      LOGGER.info("last block info null for block id {}", blockId);
+      LOGGER.debug("last block info null for block {}", block);
       return datanodeUuids;
     }
 

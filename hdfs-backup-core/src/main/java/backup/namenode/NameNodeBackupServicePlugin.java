@@ -29,8 +29,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -43,6 +41,7 @@ import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
+import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.Server;
@@ -55,8 +54,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Splitter;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableList.Builder;
 
 import backup.SingletonManager;
 import backup.api.BackupWebService;
@@ -98,8 +95,9 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
     }
     Configuration conf = getConf();
     NameNode namenode = (NameNode) service;
-    BlockManager blockManager = namenode.getNamesystem()
-                                        .getBlockManager();
+    FSNamesystem namesystem = namenode.getNamesystem();
+    String blockPoolId = namesystem.getBlockPoolId();
+    BlockManager blockManager = namesystem.getBlockManager();
     // This object is created here so that it's lifecycle follows the namenode
     try {
       restoreProcessor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
@@ -107,7 +105,7 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
                                              () -> new NameNodeRestoreProcessor(getConf(), namenode, ugi));
       LOG.info("NameNode Backup plugin setup using UGI {}", ugi);
 
-      NameNodeBackupRPCImpl backupRPCImpl = new NameNodeBackupRPCImpl(blockManager);
+      NameNodeBackupRPCImpl backupRPCImpl = new NameNodeBackupRPCImpl(blockPoolId, blockManager);
 
       InetSocketAddress listenerAddress = namenode.getServiceRpcAddress();
       int ipcPort = listenerAddress.getPort();
@@ -163,7 +161,6 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
 
   private BackupWebService<Stats> getBackupWebService(UserGroupInformation ugi, BlockManager blockManager,
       NameNodeRestoreProcessor restoreProcessor) throws IOException {
-    File reportPath = restoreProcessor.getReportPath();
     return new BackupWebService<Stats>() {
       @Override
       public StatsWritable getStats() throws IOException {
@@ -183,33 +180,8 @@ public class NameNodeBackupServicePlugin extends Configured implements ServicePl
       }
 
       @Override
-      public void runReport(boolean debug) throws IOException {
-        restoreProcessor.runReport(debug);
-      }
-
-      @Override
-      public List<String> listReports() throws IOException {
-        Builder<String> builder = ImmutableList.builder();
-        if (!reportPath.exists()) {
-          return builder.build();
-        }
-        File[] list = reportPath.listFiles((dir, name) -> name.startsWith("report."));
-        if (list != null) {
-          Arrays.sort(list, Collections.reverseOrder());
-          for (File f : list) {
-            builder.add(f.getName());
-          }
-        }
-        return builder.build();
-      }
-
-      @Override
-      public InputStream getReport(String id) throws IOException {
-        File file = new File(reportPath, id);
-        if (file.exists()) {
-          return new FileInputStream(file);
-        }
-        return null;
+      public void runGc(boolean debug) throws IOException {
+        restoreProcessor.runGc(debug);
       }
     };
   }

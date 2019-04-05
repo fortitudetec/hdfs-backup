@@ -13,10 +13,11 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.SystemConfiguration;
@@ -25,6 +26,8 @@ import com.amazonaws.metrics.AwsSdkMetrics;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.iterable.S3Objects;
+import com.amazonaws.services.s3.model.DeleteObjectsRequest;
+import com.amazonaws.services.s3.model.DeleteObjectsRequest.KeyVersion;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.ObjectListing;
@@ -220,14 +223,6 @@ public class S3BackupStore extends BackupStore {
       this.extendedBlocksPrefix = extendedBlocksPrefix;
     }
 
-    private ListObjectsV2Request createObjectRequest(String bucketName, String extendedBlocksPrefix,
-        String startAfter) {
-      return new ListObjectsV2Request().withBucketName(bucketName)
-                                       .withPrefix(extendedBlocksPrefix)
-                                       .withStartAfter(startAfter)
-                                       .withMaxKeys(maxKeys);
-    }
-
     @Override
     public ExtendedBlock next() throws Exception {
       if (iterator == null) {
@@ -247,7 +242,7 @@ public class S3BackupStore extends BackupStore {
     }
 
     private void nextListing() {
-      ListObjectsV2Request request = createObjectRequest(bucketName, extendedBlocksPrefix, startAfter);
+      ListObjectsV2Request request = createObjectRequest(bucketName, extendedBlocksPrefix, startAfter, maxKeys);
       listObjectsV2 = client.listObjectsV2(request);
       iterator = listObjectsV2.getObjectSummaries()
                               .iterator();
@@ -257,6 +252,41 @@ public class S3BackupStore extends BackupStore {
     public ExtendedBlock current() {
       return current;
     }
+  }
+
+  private static ListObjectsV2Request createObjectRequest(String bucketName, String extendedBlocksPrefix,
+      String startAfter, int maxKeys) {
+    return new ListObjectsV2Request().withBucketName(bucketName)
+                                     .withPrefix(extendedBlocksPrefix)
+                                     .withStartAfter(startAfter)
+                                     .withMaxKeys(maxKeys);
+  }
+
+  @Override
+  public List<ExtendedBlock> getExtendedBlocks(ExtendedBlock extendedBlock) throws Exception {
+    String extendedBlocksPrefix = getExtendedBlocksPrefix();
+    String startAfter = getStartAfter(extendedBlock);
+    ListObjectsV2Request request = createObjectRequest(bucketName, extendedBlocksPrefix, startAfter, maxKeys);
+    AmazonS3Client client = getAmazonS3Client();
+    try {
+      List<ExtendedBlock> result = new ArrayList<>();
+      ListObjectsV2Result listObjectsV2 = client.listObjectsV2(request);
+      List<S3ObjectSummary> objectSummaries = listObjectsV2.getObjectSummaries();
+      for (S3ObjectSummary summary : objectSummaries) {
+        String key = summary.getKey();
+        result.add(getExtendedBlockFromKey(FileType.meta, objectPrefix, key));
+      }
+      return result;
+    } finally {
+      releaseAmazonS3Client(client);
+    }
+  }
+
+  private String getStartAfter(ExtendedBlock extendedBlock) {
+    if (extendedBlock == null) {
+      return null;
+    }
+    return getMetaDataKey(extendedBlock);
   }
 
   @Override
@@ -403,6 +433,25 @@ public class S3BackupStore extends BackupStore {
     } finally {
       releaseAmazonS3Client(client);
     }
+  }
+
+  @Override
+  public void deleteBlocks(Collection<ExtendedBlock> deletes) throws Exception {
+    AmazonS3Client client = getAmazonS3Client();
+    try {
+      DeleteObjectsRequest deleteObjectsRequest = new DeleteObjectsRequest(bucketName);
+      List<KeyVersion> keys = new ArrayList<>();
+      for (ExtendedBlock extendedBlock : deletes) {
+        keys.add(new KeyVersion(getMetaDataKey(extendedBlock)));
+        keys.add(new KeyVersion(getDataKey(extendedBlock)));
+      }
+      deleteObjectsRequest.setKeys(keys);
+      client.deleteObjects(deleteObjectsRequest);
+
+    } finally {
+      releaseAmazonS3Client(client);
+    }
+
   }
 
 }

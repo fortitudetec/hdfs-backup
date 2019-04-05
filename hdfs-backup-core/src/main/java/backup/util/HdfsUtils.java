@@ -1,6 +1,7 @@
 package backup.util;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.Inet4Address;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -15,14 +16,10 @@ import org.apache.hadoop.ipc.protobuf.RpcHeaderProtos.RpcResponseHeaderProto.Rpc
 public class HdfsUtils {
 
   public static boolean isActiveNamenode(Configuration configuration) throws IOException {
-    try {
-      String nn = getActiveNamenode(configuration);
-      String hostName = Inet4Address.getLocalHost()
-                                    .getHostName();
-      if (hostName.equals(nn)) {
-        return true;
-      }
-    } catch (NotHAException e) {
+    String nn = getActiveNamenode(configuration);
+    String hostName = Inet4Address.getLocalHost()
+                                  .getHostName();
+    if (hostName.equals(nn)) {
       return true;
     }
     return false;
@@ -30,15 +27,15 @@ public class HdfsUtils {
 
   public static String getActiveNamenode(Configuration configuration) throws IOException {
     Collection<String> nameservices = configuration.getStringCollection("dfs.nameservices");
-    if (nameservices == null) {
-      throw new NotHAException();
+    if (nameservices == null || nameservices.isEmpty()) {
+      return configuration.get("dfs.namenode.rpc-address");
     }
     String nameService = nameservices.iterator()
                                      .next();
     Collection<String> namenodeIds = configuration.getStringCollection("dfs.ha.namenodes." + nameService);
     List<String> namenodeServerPortList = new ArrayList<>();
     for (String namenodeId : namenodeIds) {
-      namenodeServerPortList.add(configuration.get("dfs.namenode.rpc-address." + "hdfs-sigma-dev" + "." + namenodeId));
+      namenodeServerPortList.add(configuration.get("dfs.namenode.rpc-address." + nameService + "." + namenodeId));
     }
     for (String namenodeServerPort : namenodeServerPortList) {
       Path path = new Path("hdfs://" + namenodeServerPort + "/");
@@ -56,6 +53,8 @@ public class HdfsUtils {
         if (errorCode != RpcErrorCodeProto.ERROR_APPLICATION) {
           throw e;
         }
+      } catch (ConnectException e) {
+
       }
     }
     return null;

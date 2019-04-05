@@ -1,6 +1,8 @@
 package backup.store;
 
 import java.io.InputStream;
+import java.util.Collection;
+import java.util.List;
 
 public class DevNullBackupStore extends BackupStore {
 
@@ -43,6 +45,16 @@ public class DevNullBackupStore extends BackupStore {
   @Override
   public void destroyAllBlocks() throws Exception {
 
+  }
+
+  @Override
+  public List<ExtendedBlock> getExtendedBlocks(ExtendedBlock extendedBlock) throws Exception {
+    throw new RuntimeException();
+  }
+
+  @Override
+  public void deleteBlocks(Collection<ExtendedBlock> deletes) throws Exception {
+    
   }
 
 }

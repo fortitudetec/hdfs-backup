@@ -10,6 +10,7 @@ import java.util.Set;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSUtil;
+import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,18 +40,18 @@ public class NameNodeClient implements NameNodeBackupRPC {
   }
 
   @Override
-  public DatanodeUuids getDatanodeUuids(long blockId) throws IOException {
+  public DatanodeUuids getDatanodeUuids(String poolId, Block block) throws IOException {
     IOException lastException = null;
     List<DatanodeUuids> results = new ArrayList<>();
     for (NameNodeBackupRPC client : _nameNodeClients) {
       try {
-        results.add(client.getDatanodeUuids(blockId));
+        results.add(client.getDatanodeUuids(poolId, block));
       } catch (IOException e) {
         lastException = e;
       }
     }
     if (results.isEmpty() && lastException != null) {
-      LOGGER.error("Unknown error while trying to get datanode uuids for block {}", blockId);
+      LOGGER.error("Unknown error while trying to get datanode uuids for block {}", block);
       throw lastException;
     }
     return merge(results);

@@ -59,4 +59,13 @@ public class DataNodeBackupRPCImpl implements DataNodeBackupRPC {
     return restoreProcessor.getRestoreStats();
   }
 
+  @Override
+  public void runBlockCheck(boolean blocking, boolean ignorePreviousChecks, String blockPoolId) throws IOException {
+    try {
+      backupProcessor.runBlockCheck(blocking, ignorePreviousChecks, blockPoolId);
+    } catch (Throwable t) {
+      throw new IOException(t);
+    }
+  }
+
 }

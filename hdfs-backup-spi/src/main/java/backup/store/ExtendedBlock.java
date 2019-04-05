@@ -3,7 +3,7 @@ package backup.store;
 /**
  * Identifies a Block uniquely across the block pools
  */
-public class ExtendedBlock {
+public class ExtendedBlock implements Comparable<ExtendedBlock> {
   private final String poolId;
   private final long blockId;
   private final long length;
@@ -77,6 +77,18 @@ public class ExtendedBlock {
     } else if (!poolId.equals(other.poolId))
       return false;
     return true;
+  }
+
+  @Override
+  public int compareTo(ExtendedBlock o) {
+    int compare = poolId.compareTo(o.poolId);
+    if (compare != 0) {
+      compare = Long.compare(blockId, o.blockId);
+      if (compare != 0) {
+        return Long.compare(generationStamp, o.generationStamp);
+      }
+    }
+    return compare;
   }
 
 }

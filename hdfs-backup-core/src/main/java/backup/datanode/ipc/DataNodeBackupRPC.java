@@ -93,4 +93,6 @@ public interface DataNodeBackupRPC {
    */
   RestoreStats getRestoreStats() throws IOException;
 
+  void runBlockCheck(boolean blocking, boolean ignorePreviousChecks, String blockPoolId) throws IOException;
+
 }

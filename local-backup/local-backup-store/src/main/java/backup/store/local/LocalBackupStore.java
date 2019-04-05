@@ -22,6 +22,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -62,9 +63,11 @@ public class LocalBackupStore extends BackupStore {
   @Override
   public void backupBlock(ExtendedBlock extendedBlock, LengthInputStream data, LengthInputStream metaData)
       throws Exception {
-    LOG.info("before sleep backupBlock {} dataLength {} metaDataLength", extendedBlock, data.getLength(), metaData.getLength());
+    LOG.info("before sleep backupBlock {} dataLength {} metaDataLength", extendedBlock, data.getLength(),
+        metaData.getLength());
     Thread.sleep(TimeUnit.SECONDS.toMillis(1));
-    LOG.info("after sleep backupBlock {} dataLength {} metaDataLength", extendedBlock, data.getLength(), metaData.getLength());
+    LOG.info("after sleep backupBlock {} dataLength {} metaDataLength", extendedBlock, data.getLength(),
+        metaData.getLength());
     File dataFile = getDataFile(extendedBlock);
     File metaDataFile = getMetaDataFile(extendedBlock);
     try (FileOutputStream output = new FileOutputStream(dataFile)) {
@@ -170,6 +173,16 @@ public class LocalBackupStore extends BackupStore {
   @Override
   public void destroyAllBlocks() throws Exception {
     FileUtils.deleteDirectory(dir);
+  }
+
+  @Override
+  public List<ExtendedBlock> getExtendedBlocks(ExtendedBlock extendedBlock) throws Exception {
+    throw new RuntimeException("Not implemented");
+  }
+
+  @Override
+  public void deleteBlocks(Collection<ExtendedBlock> deletes) throws Exception {
+    throw new RuntimeException("Not implemented");    
   }
 
 }

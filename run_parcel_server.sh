@@ -64,4 +64,4 @@ buildHttpDir $BASE_PROJECT_DIR/local-backup/local-backup-store
 
 echo "]}" >> $MANIFEST
 cd ${HTTP_DIR}
-python -m SimpleHTTPServer 8002
+python -m SimpleHTTPServer 8001

@@ -18,7 +18,6 @@ package backup.namenode;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT;
 import static backup.BackupConstants.DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -51,11 +50,11 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
 
   private final long pollTime;
   private final Set<ExtendedBlock> currentRequestedRestore;
-  private final NameNodeBackupBlockCheckProcessor blockCheck;
   private final Configuration conf;
   private final FSNamesystem namesystem;
   private final BlockManager blockManager;
   private final UserGroupInformation ugi;
+  private final NameNodeBackupGC backupGc;
 
   public NameNodeRestoreProcessor(Configuration conf, NameNode namenode, UserGroupInformation ugi) throws Exception {
     this.ugi = ugi;
@@ -68,17 +67,13 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     currentRequestedRestore = Collections.newSetFromMap(cache.asMap());
     pollTime = conf.getLong(DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_KEY,
         DFS_BACKUP_NAMENODE_MISSING_BLOCKS_POLL_TIME_DEFAULT);
-    blockCheck = new NameNodeBackupBlockCheckProcessor(conf, this, namenode, ugi);
+    backupGc = new NameNodeBackupGC(conf, namenode);
     start();
-  }
-
-  public File getReportPath() {
-    return blockCheck.getReportPath();
   }
 
   @Override
   protected void closeInternal() {
-    IOUtils.closeQuietly(blockCheck);
+    IOUtils.closeQuietly(backupGc);
   }
 
   @Override
@@ -115,6 +110,20 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     }
   }
 
+  public void runBlockCheckOnDatanodes() throws Exception {
+    runBlockCheckOnDatanodes(false, false);
+  }
+
+  public void runBlockCheckOnDatanodes(boolean blocking, boolean ignorePreviousChecks) throws Exception {
+    String blockPoolId = namesystem.getBlockPoolId();
+    Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager()
+                                                    .getDatanodes();
+    for (DatanodeDescriptor datanodeDescriptor : datanodes) {
+      DataNodeBackupRPC backup = DataNodeBackupRPC.getDataNodeBackupRPC(datanodeDescriptor, conf, ugi);
+      backup.runBlockCheck(blocking, ignorePreviousChecks, blockPoolId);
+    }
+  }
+
   private synchronized void requestRestoreInternal(ExtendedBlock extendedBlock) throws Exception {
     Set<DatanodeDescriptor> datanodes = blockManager.getDatanodeManager()
                                                     .getDatanodes();
@@ -136,8 +145,8 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     return currentRequestedRestore.contains(extendedBlock);
   }
 
-  public void runBlockCheck() throws Exception {
-    this.blockCheck.runBlockCheck(false);
+  public void runGcBlocking() throws Exception {
+    backupGc.runGcBlocking(false);
   }
 
   public void restoreBlock(String poolId, long blockId, long length, long generationStamp) throws IOException {
@@ -148,8 +157,8 @@ public class NameNodeRestoreProcessor extends BaseProcessor {
     }
   }
 
-  public void runReport(boolean debug) {
-    blockCheck.runReport(debug);
+  public void runGc(boolean debug) {
+    backupGc.runGc(debug);
   }
 
 }

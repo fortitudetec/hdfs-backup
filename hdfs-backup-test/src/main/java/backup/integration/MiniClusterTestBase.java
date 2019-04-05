@@ -240,7 +240,8 @@ public abstract class MiniClusterTestBase {
       NameNode nameNode = hdfsCluster.getNameNode();
       NameNodeRestoreProcessor processor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
                                                            .getInstance(nameNode);
-      processor.runBlockCheck();
+      processor.runBlockCheckOnDatanodes(true, true);
+      processor.runGcBlocking();
 
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
@@ -284,7 +285,8 @@ public abstract class MiniClusterTestBase {
 
       NameNodeRestoreProcessor processor = SingletonManager.getManager(NameNodeRestoreProcessor.class)
                                                            .getInstance(nameNode);
-      processor.runBlockCheck();
+      processor.runBlockCheckOnDatanodes(true, true);
+      processor.runGcBlocking();
 
       Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 

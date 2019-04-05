@@ -1,24 +1,16 @@
 package backup.web;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.text.NumberFormat;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
-
-import javax.servlet.ServletOutputStream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import backup.api.BackupWebService;
 import backup.api.Stats;
 import spark.ModelAndView;
-import spark.Request;
-import spark.Response;
 import spark.ResponseTransformer;
 import spark.Route;
 import spark.Service;
@@ -58,7 +50,6 @@ public class BackupWebServer {
       attributes.put("restoreBlocks", stats.getRestoreBlocks());
       attributes.put("restoreBytesPerSecond", getMBPerSecond(stats.getRestoreBytesPerSecond()));
       attributes.put("restoresInProgressCount", stats.getRestoresInProgressCount());
-      attributes.put("reportIds", bws.listReports());
       return new ModelAndView(attributes, "index.ftl");
     };
     freeMarkerEngine = getEngine();
@@ -69,43 +60,15 @@ public class BackupWebServer {
     service.port(port);
     service.staticFileLocation("/hdfsbackupwebapp");
     service.get("/runreport", (Route) (request, response) -> {
-      bws.runReport(false);
+      bws.runGc(false);
       response.redirect("/");
       return null;
     }, HANDLER);
     service.get("/runreport-details", (Route) (request, response) -> {
-      bws.runReport(true);
+      bws.runGc(true);
       response.redirect("/");
       return null;
     }, HANDLER);
-    service.get("/report/:report", new Route() {
-      @Override
-      public Object handle(Request request, Response response) throws Exception {
-        String report = request.params("report");
-        response.header("Content-Type", "text/plain; charset=us-ascii");
-        byte[] buffer = new byte[1024];
-        InputStream inputStream = null;
-        try {
-          inputStream = bws.getReport(report);
-          if (inputStream == null) {
-            service.halt(404);
-          }
-          try (ServletOutputStream outputStream = response.raw()
-                                                          .getOutputStream()) {
-            int read;
-            while ((read = inputStream.read(buffer)) >= 0) {
-              outputStream.write(buffer, 0, read);
-            }
-          }
-        } finally {
-          if (inputStream != null) {
-            inputStream.close();
-          }
-        }
-        return null;
-      }
-
-    });
     service.get("/stats", (request, response) -> bws.getStats(), HANDLER);
     service.get("/index.html", templateViewRoute, freeMarkerEngine);
     service.get("/", templateViewRoute, freeMarkerEngine);
@@ -162,18 +125,8 @@ public class BackupWebServer {
       }
 
       @Override
-      public void runReport(boolean debug) {
-        System.out.println("Starting report - " + debug);
-      }
-
-      @Override
-      public List<String> listReports() throws IOException {
-        return Arrays.asList("1234", "4567");
-      }
-
-      @Override
-      public InputStream getReport(String id) throws IOException {
-        return new ByteArrayInputStream((id + " this is the report").getBytes());
+      public void runGc(boolean debug) {
+        System.out.println("Starting gc - " + debug);
       }
 
     };

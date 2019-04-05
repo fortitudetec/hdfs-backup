@@ -47,7 +47,7 @@ public class S3BackupStoreMiniClusterTest extends MiniClusterTestBase {
 
   @Override
   protected String testVersion() {
-    return "1.0";
+    return "1.0-SNAPSHOT";
   }
 
 }
